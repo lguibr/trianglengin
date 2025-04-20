@@ -51,17 +51,11 @@ jobs:
         # Generate coverage.xml needed by codecov uploader
         pytest --cov=trianglengin --cov-report=xml
 
-    # --- ADDED: Codecov Upload Step ---
     - name: Upload coverage reports to Codecov
-      uses: codecov/codecov-action@v4
-      env:
-        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }} # Required secret
+      uses: codecov/codecov-action@v5
       with:
-        # token: ${{ secrets.CODECOV_TOKEN }} # Token can also be passed here
-        slug: lguibr/alphatriangle # Your repository slug
-        flags: trianglengin # Flag to distinguish coverage
-        fail_ci_if_error: true # Optional: fail CI if upload fails
-    # --- END ADDED ---
+        token: ${{ secrets.CODECOV_TOKEN }}
+        slug: lguibr/trianglengin
 
   publish:
     name: Publish to PyPI

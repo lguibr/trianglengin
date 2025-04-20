@@ -30,10 +30,10 @@ Your goal is to place colorful shapes onto a special triangular grid. By filling
 
 ### 2. The Playing Field: The Grid 🗺️
 
-- **Triangle Cells:** The game board is a grid made of many small triangles. Some point UP (🔺) and some point DOWN (🔻). They alternate like a checkerboard pattern.
-- **Shape:** The grid itself is roughly triangular, often wider in the middle and narrower at the top and bottom.
-- **Playable Area:** You can only place shapes within the main grid area.
-- **Death Zones 💀:** Around the edges of the grid, some triangles might be grayed out or look different. These are "Death Zones". You **cannot** place any part of a shape onto these triangles. They are off-limits! Think of them as the boundaries.
+- **Triangle Cells:** The game board is a grid made of many small triangles. Some point UP (🔺) and some point DOWN (🔻). They alternate like a checkerboard pattern based on their row and column index (specifically, `(row + col) % 2 != 0` means UP).
+- **Shape:** The grid itself is rectangular overall, but the playable area within it is typically shaped like a triangle or hexagon, wider in the middle and narrower at the top and bottom.
+- **Playable Area:** You can only place shapes within the designated playable area.
+- **Death Zones 💀:** Around the edges of the playable area (often at the start and end of rows), some triangles are marked as "Death Zones". You **cannot** place any part of a shape onto these triangles. They are off-limits! Think of them as the boundaries within the rectangular grid.
 
 ### 3. Your Tools: The Shapes 🟦🟥🟩
 
@@ -48,7 +48,7 @@ This is the core action! Here's exactly how to place a shape:
 - **Step 4a: Select a Shape:** Look at the three shapes in the preview area. Click on the one you want to place. It should highlight 💡 to show it's selected.
 - **Step 4b: Aim on the Grid:** Move your mouse cursor over the main grid. You'll see a faint "ghost" image of your selected shape following your mouse. This preview helps you aim.
 - **Step 4c: The Placement Rules (MUST Follow!)**
-  - 📏 **Rule 1: Fit Inside:** ALL triangles of your chosen shape must land within the playable grid area. No part of the shape can hang off the edge or land in a Death Zone 💀.
+  - 📏 **Rule 1: Fit Inside Playable Area:** ALL triangles of your chosen shape must land within the playable grid area. No part of the shape can land in a Death Zone 💀.
   - 🧱 **Rule 2: No Overlap:** ALL triangles of your chosen shape must land on currently _empty_ spaces on the grid. You cannot place a shape on top of triangles that are already filled with color from previous shapes.
   - 📐 **Rule 3: Orientation Match!** This is crucial!
     - If a part of your shape is an UP triangle (🔺), it MUST land on an UP space (🔺) on the grid.
@@ -81,12 +81,11 @@ This is the most exciting part! When you place a shape, the game immediately che
 
 - **How Lines are Found: The Tracing Method (Transversion)**
 
-  - **The Idea:** Instead of checking every possible line combination all the time, the game pre-calculates all _potential_ maximal lines (the longest possible lines in each direction) when it starts. It does this by "tracing" or "transversing" paths from every playable triangle on the grid.
-  - **Starting Point:** Imagine picking any triangle `(r, c)` on the grid.
-  - **Tracing Backwards:** For each direction (Horizontal, Diagonal ↘️, Diagonal ↗️), the game first traces _backwards_ from `(r, c)` along that direction's path until it hits the edge of the grid, a death zone, or an already visited triangle (for that direction). This finds the _true beginning_ of the potential maximal line passing through `(r, c)`.
-  - **Tracing Forwards:** From that true beginning point, the game traces _forwards_ along the path, adding every valid, playable triangle coordinate to a list until it hits the edge or a death zone.
-  - **Recording the Line:** If the traced line is long enough (meets the minimum length requirement, usually 3 or more triangles), the game records this list of coordinates as one potential line. It also marks all triangles in this line as "visited" for this specific direction, so it doesn't trace the same maximal line multiple times starting from different points within it.
-  - **All Potential Lines:** By doing this starting from _every_ playable triangle for _all three_ directions, the game builds a complete list of all possible maximal lines that could ever be cleared.
+  - **The Idea:** Instead of checking every possible line combination all the time, the game pre-calculates all _potential_ lines (segments of triangles along the three directions) that meet the minimum length requirement when it starts. It does this by "tracing" or "transversing" paths from every playable triangle on the grid.
+  - **Starting Point:** Imagine picking any playable triangle `(r, c)` on the grid.
+  - **Tracing Forwards:** For each direction (Horizontal, Diagonal ↘️, Diagonal ↗️), the game traces _forwards_ from `(r, c)` along that direction's path, adding every valid, playable triangle coordinate to a list.
+  - **Recording Sub-Lines:** As the path is traced, every time the current segment reaches the minimum required length (e.g., 3 triangles), that segment is recorded as a potential line. The tracing continues, and longer segments containing the initial ones are also recorded. For example, if tracing finds `A-B-C-D` and the minimum length is 3, it records `(A,B,C)`, `(B,C,D)`, and `(A,B,C,D)`.
+  - **All Potential Lines:** By doing this starting from _every_ playable triangle for _all three_ directions, and storing only unique lines found, the game builds a complete list of all possible lines that could ever be cleared.
 
 - **Defining the Paths (Neighbor Logic):** How does the game know which triangle is "next" when tracing? It depends on the current triangle's orientation (🔺 or 🔻) and the direction being traced:
 
@@ -108,7 +107,7 @@ This is the most exciting part! When you place a shape, the game immediately che
     ```
   - **Diagonal ↘️ (TL-BR):** (Connects via shared horizontal edges)
     ```
-    ...[🔺]...  <-- Connects below
+    ...[🔺]...
     ...[🔻][🔺] ...
     ...     [🔻][🔺] ...
     ...         [🔻] ...
@@ -116,7 +115,7 @@ This is the most exciting part! When you place a shape, the game immediately che
     ```
   - **Diagonal ↗️ (BL-TR):** (Connects via shared horizontal edges)
     ```
-    ...           [🔺]  ... 
+    ...           [🔺]  ...
     ...      [🔺][🔻]   ...
     ... [🔺][🔻]        ...
     ... [🔻]            ...
@@ -207,7 +206,7 @@ trianglengin/
 │   │   ├── structs/        # Triangle, Shape, constants
 │   │   │   └── README.md
 │   │   └── environment/    # GameState, GridData, GridLogic, ShapeLogic, ActionCodec
-│   │       └── README.md
+│   │       └── README.md   # Includes Grid, Shapes, Logic sub-packages
 │   ├── interaction/        # User input handling for interactive modes
 │   │   └── README.md
 │   ├── visualization/      # Basic Pygame rendering components
@@ -226,7 +225,8 @@ trianglengin/
 │   │   └── README.md
 │   └── config/             # Shared configuration models
 │       ├── __init__.py
-│       └── env_config.py   # Environment configuration
+│       ├── env_config.py   # Environment configuration (EnvConfig)
+│       └── display_config.py # Display configuration (DisplayConfig)
 ├── tests/                  # Unit tests for trianglengin components
 │   ├── __init__.py
 │   ├── conftest.py         # Shared test fixtures
@@ -247,7 +247,7 @@ trianglengin/
 - **`trianglengin.core`**: Contains the fundamental game logic.
   - **`structs`**: Defines `Triangle`, `Shape`, and related constants. ([`core/structs/README.md`](trianglengin/core/structs/README.md))
   - **`environment`**: Defines `GameState`, `GridData`, `GridLogic`, `ShapeLogic`, action encoding/decoding, and step execution logic. ([`core/environment/README.md`](trianglengin/core/environment/README.md))
-- **`trianglengin.config`**: Contains shared configuration models (`EnvConfig`).
+- **`trianglengin.config`**: Contains shared configuration models (`EnvConfig`, `DisplayConfig`).
 - **`trianglengin.visualization`**: Basic Pygame rendering (`Visualizer`, drawing functions, colors, fonts, layout). ([`visualization/README.md`](trianglengin/visualization/README.md))
 - **`trianglengin.interaction`**: Input handling for interactive modes (`InputHandler`). ([`interaction/README.md`](trianglengin/interaction/README.md))
 - **`trianglengin.app`**: Integrates components for interactive modes.

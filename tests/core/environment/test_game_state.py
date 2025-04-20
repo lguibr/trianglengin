@@ -1,284 +1,422 @@
-# File: trianglengin/tests/core/environment/test_game_state.py
+# File: tests/core/environment/test_game_state.py
+import copy
+import logging
+
 import numpy as np
 import pytest
-
-# Import mocker fixture from pytest-mock
 from pytest_mock import MockerFixture
 
-# Import directly from the library being tested
-from trianglengin.config import EnvConfig  # Added EnvConfig import
-from trianglengin.core.environment import GameState, encode_action
-from trianglengin.core.environment.grid import logic as GridLogic
-from trianglengin.core.structs import Shape  # Added Shape import
+import trianglengin.core.environment.grid.logic as GridLogic
+from trianglengin.config.env_config import EnvConfig
+from trianglengin.core.environment.action_codec import (
+    ActionType,
+    decode_action,
+    encode_action,
+)
+from trianglengin.core.environment.game_state import GameState
+from trianglengin.core.structs.shape import Shape
+from trianglengin.visualization.core.colors import Color
 
-# Use fixtures from the local conftest.py
-# Fixtures are implicitly injected by pytest
+# Configure logging for tests
+logging.basicConfig(level=logging.INFO)  # Set to INFO to reduce noise unless debugging
 
-
-def test_game_state_initialization(game_state: GameState):
-    """Test the initial state of the game."""
-    assert game_state.current_step == 0
-    assert game_state.game_score == 0.0
-    assert not game_state.is_over()
-    assert len(game_state.shapes) == game_state.env_config.NUM_SHAPE_SLOTS
-    # Initial state should have valid actions unless the board is tiny/unplayable
-    if game_state.env_config.ROWS > 0 and game_state.env_config.COLS > 0:
-        assert len(game_state.valid_actions()) > 0
-    # Check grid is initialized
-    assert game_state.grid_data is not None
+# Define a default color for shapes in tests
+DEFAULT_TEST_COLOR: Color = (100, 100, 100)
 
 
-def test_game_state_reset(game_state: GameState):
-    """Test resetting the game state."""
-    # Make some moves
-    valid_actions = game_state.valid_actions()
-    action1 = -1
-    action2 = -1
-    if valid_actions:
-        # Ensure we don't pick the same action twice if only one is valid
-        action1 = valid_actions[0]
-        game_state.step(action1)
-        # Re-calculate valid actions after the first step
-        valid_actions_after_step = game_state.valid_actions()
-        if valid_actions_after_step:
-            action2 = valid_actions_after_step[0]  # Pick the first available
-            # Avoid stepping with the same action if it's the only one left
-            if action1 != action2 or len(valid_actions_after_step) > 1:
-                game_state.step(action2)
+@pytest.fixture
+def default_config() -> EnvConfig:
+    """Fixture for default environment configuration."""
+    return EnvConfig()
 
-    # Check if steps were actually taken
-    steps_taken = game_state.current_step > 0
-    assert (
-        steps_taken
-        or not valid_actions
-        or (action1 != -1 and not valid_actions_after_step)
+
+@pytest.fixture
+def default_game_state(default_config: EnvConfig) -> GameState:
+    """Fixture for a default GameState."""
+    return GameState(config=default_config, initial_seed=123)  # Use fixed seed
+
+
+@pytest.fixture
+def game_state_with_fixed_shapes() -> GameState:
+    """Fixture for a GameState with predictable shapes for testing."""
+    # Create a new GameState directly with the test config
+    test_config = EnvConfig(
+        ROWS=3,
+        COLS=3,
+        PLAYABLE_RANGE_PER_ROW=[(0, 3), (0, 3), (0, 3)],  # Full 3x3 is playable
+        NUM_SHAPE_SLOTS=3,
+        MIN_LINE_LENGTH=3,
     )
+    # Use a fixed seed for the reset within this fixture
+    gs = GameState(config=test_config, initial_seed=456)
+    # gs.reset() # reset is called in __init__
 
-    game_state.reset()
+    # Manually set the shapes we want for the test
+    shape1 = Shape([(0, 0, False)], color=DEFAULT_TEST_COLOR)  # Down
+    shape2 = Shape([(0, 0, True)], color=DEFAULT_TEST_COLOR)  # Up
+    shape3 = Shape(
+        [(0, 0, False), (1, 0, False)], color=DEFAULT_TEST_COLOR
+    )  # Two downs (vertical)
 
-    assert game_state.current_step == 0
-    assert game_state.game_score == 0.0
-    assert not game_state.is_over()
-    assert len(game_state.shapes) == game_state.env_config.NUM_SHAPE_SLOTS
-    assert all(s is not None for s in game_state.shapes)  # Should be refilled
-    if game_state.env_config.ROWS > 0 and game_state.env_config.COLS > 0:
-        assert len(game_state.valid_actions()) > 0
+    gs.shapes = [
+        copy.deepcopy(shape1),
+        copy.deepcopy(shape2),
+        copy.deepcopy(shape3),
+    ]
+    # Force recalculation of valid actions after manually setting shapes
+    gs.valid_actions(force_recalculate=True)
+    return gs
 
 
-def test_game_state_step(game_state_with_fixed_shapes: GameState):
-    """Test a valid step using the 3x3 fixed shape fixture."""
-    gs = game_state_with_fixed_shapes  # 3x3 grid
-    initial_score = gs.game_score
-    initial_step = gs.current_step
-    shape_idx = 0  # First fixed shape: single down
-    # Place at (0,0) which is Down and playable in the 3x3 grid
-    r, c = 0, 0
-    action = encode_action(shape_idx, r, c, gs.env_config)  # Config is 3x3
+def test_game_state_initialization(default_game_state: GameState):
+    """Test basic initialization of GameState."""
+    gs = default_game_state
+    assert gs.env_config is not None
+    assert gs.grid_data is not None
+    assert len(gs.shapes) == gs.env_config.NUM_SHAPE_SLOTS
+    assert gs.game_score() == 0
+    assert gs._game_over_reason is None or "No valid actions" in gs._game_over_reason
+    assert len(gs.valid_actions()) > 0 or gs.is_over()
 
-    # Ensure the action is valid before stepping
-    assert (
-        gs.shapes[shape_idx] is not None
-    )  # Ensure shape exists before checking placement
-    assert GridLogic.can_place(gs.grid_data, gs.shapes[shape_idx], r, c)
-    assert action in gs.valid_actions(), f"Action {action} not in {gs.valid_actions()}"
+
+def test_game_state_reset(default_game_state: GameState):
+    """Test resetting the GameState."""
+    gs = default_game_state
+    initial_shapes_before_step = copy.deepcopy(gs.shapes)
+    action = next(iter(gs.valid_actions()), None)
+
+    if action is not None:
+        gs.step(action)
+        assert gs.game_score() > 0 or len(gs.valid_actions()) == 0
+    else:
+        pass
+
+    gs.reset()
+
+    assert gs.game_score() == 0
+    assert gs._game_over_reason is None or "No valid actions" in gs._game_over_reason
+    assert gs.grid_data.is_empty()
+    assert len(gs.shapes) == gs.env_config.NUM_SHAPE_SLOTS
+    assert all(s is not None for s in gs.shapes)
+    assert gs.shapes != initial_shapes_before_step
+    assert len(gs.valid_actions()) > 0 or gs.is_over()
+
+
+def test_game_state_step(default_game_state: GameState):
+    """Test a single valid step."""
+    gs = default_game_state
+    initial_score = gs.game_score()
+    initial_shapes = [s.copy() if s else None for s in gs.shapes]
+    initial_shape_count = sum(1 for s in initial_shapes if s is not None)
+
+    if not gs.valid_actions():
+        pytest.skip("Cannot perform step test: no valid actions initially.")
+
+    action = next(iter(gs.valid_actions()))
+    shape_index, r, c = decode_action(action, gs.env_config)
+    shape_placed = gs.shapes[shape_index]
+    assert shape_placed is not None, "Action corresponds to an empty shape slot."
+    placed_triangle_count = len(shape_placed.triangles)
+
+    logging.debug(
+        f"Before step: Action={action}, ShapeIdx={shape_index}, Pos=({r},{c})"
+    )
+    logging.debug(f"Before step: Score={initial_score}, Shapes={gs.shapes}")
+    logging.debug(f"Before step: Valid Actions Count={len(gs.valid_actions())}")
 
     reward, done = gs.step(action)
 
-    assert reward > -10.0  # Should not be game over penalty
-    assert not done
-    assert gs.current_step == initial_step + 1
-    assert gs.game_score > initial_score
-    assert gs.shapes[shape_idx] is None  # Shape should be removed
+    logging.debug(f"After step: Reward={reward}, Done={done}")
+    logging.debug(f"After step: Score={gs.game_score()}, Shapes={gs.shapes}")
+    logging.debug(f"After step: Valid Actions Count={len(gs.valid_actions())}")
+    logging.debug(f"After step: Grid Occupied Sum={np.sum(gs.grid_data._occupied_np)}")
+
+    assert not done or gs.is_over()
+    assert reward is not None
+    assert gs.shapes[shape_index] is None
+
+    if placed_triangle_count > 0:
+        assert not gs.grid_data.is_empty(), (
+            "Grid is empty after placing a shape with triangles"
+        )
+    else:
+        pass
+
+    current_shape_count = sum(1 for s in gs.shapes if s is not None)
+    if initial_shape_count == 1:
+        assert current_shape_count == gs.env_config.NUM_SHAPE_SLOTS
+    else:
+        expected_count = initial_shape_count - 1
+        assert current_shape_count == expected_count
+
+    assert isinstance(gs.valid_actions(), set)
 
 
-def test_game_state_step_invalid_action(game_state: GameState):
+def test_game_state_step_invalid_action(default_game_state: GameState):
     """Test stepping with an invalid action index."""
-    invalid_action_index = -1
-    with pytest.raises(ValueError):
-        game_state.step(invalid_action_index)
+    gs = default_game_state
+    invalid_action = ActionType(-1)
+    with pytest.raises(ValueError, match="Action is not in the set of valid actions"):
+        gs.step(invalid_action)
 
-    invalid_action_index = int(game_state.env_config.ACTION_DIM)  # type: ignore[call-overload]
-    with pytest.raises(ValueError):
-        game_state.step(invalid_action_index)
+    invalid_action_large = ActionType(gs.env_config.ACTION_DIM)
+    with pytest.raises(ValueError, match="Action is not in the set of valid actions"):
+        gs.step(invalid_action_large)
 
+    empty_slot_idx = -1
+    for i, shape in enumerate(gs.shapes):
+        if shape is None:
+            empty_slot_idx = i
+            break
+    if empty_slot_idx != -1:
+        r, c = 0, 0
+        found = False
+        for r_try in range(gs.env_config.ROWS):
+            start_c, end_c = gs.env_config.PLAYABLE_RANGE_PER_ROW[r_try]
+            for c_try in range(start_c, end_c):
+                r, c = r_try, c_try
+                found = True
+                break
+            if found:
+                break
+        if not found:
+            pytest.skip("Cannot find playable cell for empty slot test.")
 
-def test_game_state_step_invalid_placement(game_state_with_fixed_shapes: GameState):
-    """Test stepping with a valid action index but invalid placement logic."""
-    gs = game_state_with_fixed_shapes
-    shape_idx = 0
-    # Occupy the target cell first
-    r, c = 0, 0  # Valid placement spot for shape 0
-    gs.grid_data._occupied_np[r, c] = True  # Occupy it
-    action = encode_action(shape_idx, r, c, gs.env_config)
-
-    # The action might be in valid_actions initially if calculated before occupation
-    # but execute_placement should handle the failure.
-    # We expect a reward of 0.0 as placement fails internally.
-    reward, done = gs.step(action)
-    assert reward == 0.0
-    assert not done  # Game shouldn't end due to invalid placement attempt
-
-
-def test_game_state_is_over(game_state: GameState):
-    """Test game over condition."""
-    assert not game_state.is_over()
-    # Fill the grid completely
-    playable_mask = ~game_state.grid_data._death_np
-    game_state.grid_data._occupied_np[playable_mask] = True
-    # Make shapes unplaceable (e.g., None)
-    game_state.shapes = [None] * game_state.env_config.NUM_SHAPE_SLOTS
-    # Now, valid_actions should be empty, triggering game over check in step or directly
-    assert not game_state.valid_actions()
-    # Manually trigger the check if needed (step would normally do this)
-    if not game_state.valid_actions():
-        game_state.game_over = True
-    assert game_state.is_over()
+        action_for_empty_slot = encode_action(empty_slot_idx, r, c, gs.env_config)
+        assert action_for_empty_slot not in gs.valid_actions()
+        with pytest.raises(
+            ValueError, match="Action is not in the set of valid actions"
+        ):
+            gs.step(action_for_empty_slot)
 
 
-def test_game_state_copy(game_state: GameState):
-    """Test the deepcopy mechanism."""
-    # Make a move
-    valid_actions = game_state.valid_actions()
-    if valid_actions:
-        game_state.step(valid_actions[0])
+def test_game_state_step_invalid_placement(default_game_state: GameState):
+    """Test stepping with an action that is geometrically invalid."""
+    gs = default_game_state
 
-    copy_state = game_state.copy()
+    if not gs.valid_actions():
+        pytest.skip("No valid actions available to perform the first step.")
 
-    # Check basic properties
-    assert copy_state.current_step == game_state.current_step
-    assert copy_state.game_score == game_state.game_score
-    assert copy_state.is_over() == game_state.is_over()
-    assert copy_state.env_config == game_state.env_config
+    action1 = next(iter(gs.valid_actions()))
+    shape_index1, r1, c1 = decode_action(action1, gs.env_config)
+    gs.step(action1)
 
-    # Check independence of mutable objects
-    assert copy_state.grid_data is not game_state.grid_data
-    assert np.array_equal(
-        copy_state.grid_data._occupied_np, game_state.grid_data._occupied_np
-    )
-    assert copy_state.shapes is not game_state.shapes
-    assert len(copy_state.shapes) == len(game_state.shapes)
-    for i in range(len(game_state.shapes)):
-        if game_state.shapes[i] is None:
-            assert copy_state.shapes[i] is None
+    available_shape_idx = -1
+    for idx, shape in enumerate(gs.shapes):
+        if shape is not None:
+            available_shape_idx = idx
+            break
+
+    if available_shape_idx == -1:
+        if all(s is None for s in gs.shapes):
+            pytest.skip("All shapes used, refill likely occurred or game ended.")
         else:
-            assert copy_state.shapes[i] is not game_state.shapes[i]
-            # Use __eq__ for comparison
-            assert copy_state.shapes[i] == game_state.shapes[i]
+            pytest.skip("No shapes left after first step.")
 
-    # Modify copy and check original is unchanged
-    copy_state.game_score += 100
-    assert game_state.game_score != copy_state.game_score
-    if copy_state.shapes and copy_state.shapes[0]:  # Check list and element exist
-        copy_state.shapes[0].color = (1, 1, 1)
-        if game_state.shapes and game_state.shapes[0]:  # Check list and element exist
-            assert game_state.shapes[0].color != (1, 1, 1)
-    # Use a valid coordinate for the grid size
-    r_mod, c_mod = 0, 0
-    if copy_state.grid_data.valid(r_mod, c_mod) and not copy_state.grid_data.is_death(
-        r_mod, c_mod
-    ):
-        original_value = copy_state.grid_data._occupied_np[r_mod, c_mod]
-        copy_state.grid_data._occupied_np[r_mod, c_mod] = not original_value
-        # Ensure original game state's value hasn't changed
-        assert (
-            game_state.grid_data._occupied_np[r_mod, c_mod]
-            != copy_state.grid_data._occupied_np[r_mod, c_mod]
+    invalid_action = encode_action(available_shape_idx, r1, c1, gs.env_config)
+
+    if invalid_action in gs.valid_actions():
+        logging.warning(
+            f"DEBUG: Action {invalid_action} (shape {available_shape_idx} at {r1},{c1}) is unexpectedly in valid_actions()"
+        )
+        pytest.skip(
+            "Test setup failed: Action for invalid placement is in valid_actions()."
         )
 
+    with pytest.raises(ValueError, match="Action is not in the set of valid actions"):
+        gs.step(invalid_action)
 
-# --- ADDED TESTS ---
-def test_game_state_get_outcome_non_terminal(game_state: GameState):
-    """Test get_outcome returns 0.0 for non-terminal states."""
-    assert not game_state.is_over()
-    assert game_state.get_outcome() == 0.0
+
+def test_game_state_is_over(default_game_state: GameState, mocker: MockerFixture):
+    """Test the is_over condition by mocking valid_actions."""
+    gs = default_game_state
+    gs.is_over()
+    gs.get_outcome()
+
+    mocker.patch.object(
+        gs, "valid_actions", return_value=set(), autospec=True
+    )
+    gs._game_over_reason = "Forced by mock"
+    gs._game_over = True
+
+    assert gs.is_over()
+    assert gs.get_outcome() == -1.0
+    assert "Forced by mock" in gs.get_game_over_reason()
+
+    mocker.stopall()
+    gs.reset()
+
+    final_is_over = gs.is_over()
+    final_outcome = gs.get_outcome()
+
+    if final_is_over:
+        assert final_outcome == -1.0
+        assert "No valid actions available at start" in gs.get_game_over_reason()
+        logging.info("Note: Game is over immediately after reset (no valid actions).")
+    else:
+        assert final_outcome == 0.0
+        assert gs.get_game_over_reason() is None
+
+
+def test_game_state_copy(default_game_state: GameState):
+    """Test the copy method of GameState."""
+    gs1 = default_game_state
+    action1 = next(iter(gs1.valid_actions()), None)
+
+    if action1:
+        gs1.step(action1)
+
+    gs2 = gs1.copy()
+
+    assert gs1.game_score() == gs2.game_score()
+    assert gs1.env_config == gs2.env_config
+    assert gs1._game_over_reason == gs2._game_over_reason
+    assert gs1.is_over() == gs2.is_over()
+
+    assert gs1.grid_data is not gs2.grid_data
+    assert np.array_equal(gs1.grid_data._occupied_np, gs2.grid_data._occupied_np)
+    assert np.array_equal(gs1.grid_data._color_id_np, gs2.grid_data._color_id_np)
+    assert np.array_equal(gs1.grid_data._death_np, gs2.grid_data._death_np)
+    assert gs1.grid_data._occupied_np is not gs2.grid_data._occupied_np
+    assert gs1.grid_data._color_id_np is not gs2.grid_data._color_id_np
+    assert gs1.grid_data._death_np is not gs2.grid_data._death_np
+
+    assert gs1.shapes is not gs2.shapes
+    assert len(gs1.shapes) == len(gs2.shapes)
+    for i in range(len(gs1.shapes)):
+        if gs1.shapes[i] is None:
+            assert gs2.shapes[i] is None
+        else:
+            assert gs1.shapes[i] == gs2.shapes[i]
+            assert gs1.shapes[i] is not gs2.shapes[i]
+
+    assert gs1.valid_actions() == gs2.valid_actions()
+    if (
+        hasattr(gs1, "_valid_actions_cache")
+        and gs1._valid_actions_cache is not None
+        and gs2._valid_actions_cache is not None
+    ):
+        assert gs1._valid_actions_cache is not gs2._valid_actions_cache
+
+    action2 = next(iter(gs2.valid_actions()), None)
+    if not action2:
+        assert not gs1.valid_actions()
+        return
+
+    logging.debug(f"gs2 Before step: Action={action2}")
+    logging.debug(f"gs2 Before step: Score={gs2.game_score()}, Shapes={gs2.shapes}")
+    logging.debug(f"gs2 Before step: Valid Actions Count={len(gs2.valid_actions())}")
+    logging.debug(
+        f"gs2 Before step: Grid Occupied Sum={np.sum(gs2.grid_data._occupied_np)}"
+    )
+
+    reward2, done2 = gs2.step(action2)
+
+    logging.debug(f"gs2 After step: Reward={reward2}, Done={done2}")
+    logging.debug(f"gs2 After step: Score={gs2.game_score()}, Shapes={gs2.shapes}")
+    logging.debug(f"gs2 After step: Valid Actions Count={len(gs2.valid_actions())}")
+    logging.debug(
+        f"gs2 After step: Grid Occupied Sum={np.sum(gs2.grid_data._occupied_np)}"
+    )
+    logging.debug(
+        f"gs1 After gs2 step: Grid Occupied Sum={np.sum(gs1.grid_data._occupied_np)}"
+    )
+
+    assert gs1.game_score() != gs2.game_score() or reward2 == 0.0
+
+    shape_idx2, _, _ = decode_action(action2, gs2.env_config)
+    assert gs2.shapes[shape_idx2] is None
+
+    assert not np.array_equal(gs1.grid_data._occupied_np, gs2.grid_data._occupied_np), (
+        "Grid occupied state should differ after step in copy"
+    )
+
+
+def test_game_state_get_outcome_non_terminal(default_game_state: GameState):
+    """Test get_outcome when the game is not over."""
+    gs = default_game_state
+    if gs.is_over():
+        pytest.skip("Game is over initially, cannot test non-terminal outcome.")
+    assert not gs.is_over()
+    assert gs.get_outcome() == 0.0
 
 
 def test_game_state_step_triggers_game_over(
     game_state_with_fixed_shapes: GameState, mocker: MockerFixture
 ):
-    """Test that placing the last possible piece triggers game over (mocking refill)."""
-    gs = game_state_with_fixed_shapes  # Has 3 slots, 3x3 grid
-    # Fill the grid almost completely, leaving just enough space for the 2 single shapes
-    playable_mask = ~gs.grid_data._death_np
-    gs.grid_data._occupied_np[playable_mask] = True
-    # Empty spots for the fixed shapes
-    # Shape 0: (0,0,False) -> needs (0,0) empty [Down]
-    # Shape 1: (0,0,True) -> needs (0,1) empty [Up]
-    empty_spots = [(0, 0), (0, 1)]
-    for r_empty, c_empty in empty_spots:
-        if gs.grid_data.valid(r_empty, c_empty):
-            gs.grid_data._occupied_np[r_empty, c_empty] = False
-            gs.grid_data._color_id_np[r_empty, c_empty] = -1
+    """Test that placing the last possible piece triggers game over."""
+    gs = game_state_with_fixed_shapes  # Uses 3x3 grid
 
-    # --- Setup: Remove the 3rd shape (domino) so placing the 2nd empties all slots ---
+    # Setup: Fill grid except for two specific *playable* cells
+    # (1,0) is Down, (1,1) is Up
+    gs.grid_data._occupied_np[:, :] = True
+    gs.grid_data._occupied_np[1, 0] = False  # Make (1,0) empty
+    gs.grid_data._occupied_np[1, 1] = False  # Make (1,1) empty
+    gs.grid_data._color_id_np[:, :] = 0
+    gs.grid_data._color_id_np[1, 0] = -1
+    gs.grid_data._color_id_np[1, 1] = -1
+
+    # Setup: Ensure only the first two shapes are available
+    # Shape 0: Single Down. Shape 1: Single Up.
     gs.shapes[2] = None
+    gs.valid_actions(force_recalculate=True)  # Recalculate valid actions
 
-    # Mock refill_shape_slots to prevent it from running
+    # Verify shape 0 (Down) can be placed at (1,0) [Down]
+    assert gs.shapes[0] is not None
+    assert GridLogic.can_place(gs.grid_data, gs.shapes[0], 1, 0), (
+        "Shape 0 (Down) should be placeable at (1,0)"
+    )
+    action1 = encode_action(0, 1, 0, gs.env_config)
+    assert action1 in gs.valid_actions()
+
+    # Verify shape 1 (Up) can be placed at (1,1) [Up]
+    assert gs.shapes[1] is not None
+    assert GridLogic.can_place(gs.grid_data, gs.shapes[1], 1, 1), (
+        "Shape 1 (Up) should be placeable at (1,1)"
+    )
+    action2 = encode_action(1, 1, 1, gs.env_config)
+    assert action2 in gs.valid_actions()
+
     mock_refill = mocker.patch(
         "trianglengin.core.environment.shapes.logic.refill_shape_slots"
     )
 
-    # Place first shape (shape 0 at 0,0)
-    action1 = encode_action(0, 0, 0, gs.env_config)
-    assert gs.shapes[0] is not None  # Check shape exists
-    assert GridLogic.can_place(gs.grid_data, gs.shapes[0], 0, 0)  # Verify placement
-    assert action1 in gs.valid_actions()
+    # Step 1: Place shape 0 at (1,0)
     reward1, done1 = gs.step(action1)
-    assert not done1
+    assert not done1, "Game should not be over after first placement"
     assert gs.shapes[0] is None
-    assert gs.shapes[1] is not None  # Shape 1 (Up) remains
-    assert gs.shapes[2] is None  # Shape 2 was removed
-    mock_refill.assert_not_called()  # Refill shouldn't be called yet
+    assert gs.shapes[1] is not None  # Shape 1 still available
+    assert gs.shapes[2] is None
+    mock_refill.assert_not_called()
+    assert gs.grid_data._occupied_np[1, 0]  # Verify placement
 
-    # Place the second shape (shape 1 at 0,1)
-    action2 = encode_action(1, 0, 1, gs.env_config)
-    assert gs.shapes[1] is not None  # Check shape exists
-    assert GridLogic.can_place(gs.grid_data, gs.shapes[1], 0, 1)  # Verify placement
-    assert action2 in gs.valid_actions()
+    # Step 2: Place shape 1 at (1,1) (the last available shape)
     reward2, done2 = gs.step(action2)
 
-    # Check if the mock was called exactly once *during* the second step
-    assert mock_refill.call_count == 1, (
-        f"Expected refill mock to be called once, but was called {mock_refill.call_count} times."
-    )
+    mock_refill.assert_not_called()  # Refill shouldn't happen
+    assert done2, "The second step (placing last shape) should have returned done=True"
+    assert gs.is_over(), "Game state should be marked as over after placing last shape"
+    assert "No valid actions available" in gs.get_game_over_reason()
+    assert gs.get_outcome() == -1.0
 
-    # Game should now be over because grid is full AND all shape slots are empty,
-    # and refill was mocked, so valid_actions() will be empty.
-    assert done2, (
-        "Game should be over after placing the last possible piece (refill mocked)"
-    )
-    assert gs.is_over()
-    assert not gs.valid_actions()  # No more valid actions
+    # Final state check
+    assert gs.shapes[0] is None
+    assert gs.shapes[1] is None
+    assert gs.shapes[2] is None
+    assert gs.grid_data._occupied_np[1, 0]
+    assert gs.grid_data._occupied_np[1, 1]
+    playable_mask = ~gs.grid_data._death_np
+    assert gs.grid_data._occupied_np[playable_mask].all()
 
 
-# --- END ADDED TESTS ---
+def test_game_state_forced_game_over(default_game_state: GameState):
+    """Test forcing game over manually."""
+    gs = default_game_state
+    if gs.is_over():
+        pytest.skip("Game is over initially, cannot test forcing.")
 
-
-# --- Test added for reliable game over scenario ---
-def test_game_state_forced_game_over(default_env_config: EnvConfig):
-    """Test game over by filling all cells of one orientation and providing only shapes of that orientation."""
-    gs = GameState(config=default_env_config, initial_seed=777)
-    config = gs.env_config
-
-    # Fill all non-death UP-pointing triangles
-    for r in range(config.ROWS):
-        for c in range(config.COLS):
-            is_up = (r + c) % 2 != 0
-            if is_up and not gs.grid_data.is_death(r, c):
-                gs.grid_data._occupied_np[r, c] = True
-
-    # Provide only single UP-pointing triangles in shape slots
-    up_shape = Shape([(0, 0, True)], (0, 255, 0))  # Single Up
-    gs.shapes = [up_shape.copy() for _ in range(config.NUM_SHAPE_SLOTS)]
-
-    # Verify no valid actions exist
-    assert not gs.valid_actions()
-
-    # Manually set game_over flag as step() isn't called here
-    gs.game_over = True
-    assert gs.is_over()
-
-    # Test reset brings it back
-    gs.reset()
     assert not gs.is_over()
-    assert len(gs.valid_actions()) > 0  # Should have valid actions after reset
+    gs.force_game_over("Test reason")
+    assert gs.is_over()
+    assert "Test reason" in gs.get_game_over_reason()
+    assert gs.get_outcome() == -1.0

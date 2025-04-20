@@ -1,21 +1,25 @@
+# File: trianglengin/visualization/drawing/highlight.py
 import pygame
 
 # Use internal imports
-from ...config import EnvConfig
 from ...core.structs import Triangle
-from ..core import colors, coord_mapper
+from ..core import colors
 
 
 def draw_debug_highlight(
-    surface: pygame.Surface, r: int, c: int, config: EnvConfig
+    surface: pygame.Surface,
+    r: int,
+    c: int,
+    # config: EnvConfig, # Removed - use cw, ch, ox, oy
+    cw: float,
+    ch: float,
+    ox: float,
+    oy: float,
 ) -> None:
-    """Highlights a specific triangle border for debugging."""
+    """Highlights a specific triangle border for debugging using pre-calculated parameters."""
     if surface.get_width() <= 0 or surface.get_height() <= 0:
         return
 
-    cw, ch, ox, oy = coord_mapper._calculate_render_params(
-        surface.get_width(), surface.get_height(), config
-    )
     if cw <= 0 or ch <= 0:
         return
 

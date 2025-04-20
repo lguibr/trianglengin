@@ -1,7 +1,10 @@
-# File: trianglengin/trianglengin/core/structs/shape.py
-# Moved from alphatriangle/structs/shape.py
-# No code changes needed, only file location.
+# File: trianglengin/core/structs/shape.py
 from __future__ import annotations
+
+import logging
+from typing import cast
+
+logger = logging.getLogger(__name__)
 
 
 class Shape:
@@ -10,7 +13,21 @@ class Shape:
     def __init__(
         self, triangles: list[tuple[int, int, bool]], color: tuple[int, int, int]
     ):
-        self.triangles: list[tuple[int, int, bool]] = sorted(triangles)
+        # Ensure triangles are tuples and sort them for consistent representation
+        # Sorting is based on (row, col) primarily
+        try:
+            # Explicitly cast inner tuples to the correct type for mypy
+            processed_triangles = [
+                cast("tuple[int, int, bool]", tuple(t)) for t in triangles
+            ]
+            self.triangles: list[tuple[int, int, bool]] = sorted(processed_triangles)
+        except Exception as e:
+            logger.error(f"Failed to sort triangles: {triangles}. Error: {e}")
+            # Fallback or re-raise depending on desired behavior
+            self.triangles = [
+                cast("tuple[int, int, bool]", tuple(t)) for t in triangles
+            ]  # Store as is if sort fails
+
         self.color: tuple[int, int, int] = color
 
     def bbox(self) -> tuple[int, int, int, int]:
@@ -35,8 +52,10 @@ class Shape:
         """Checks for equality based on triangles and color."""
         if not isinstance(other, Shape):
             return NotImplemented
+        # Compare sorted lists of tuples
         return self.triangles == other.triangles and self.color == other.color
 
     def __hash__(self) -> int:
         """Allows shapes to be used in sets/dicts if needed."""
+        # Hash the tuple representation of the sorted list
         return hash((tuple(self.triangles), self.color))

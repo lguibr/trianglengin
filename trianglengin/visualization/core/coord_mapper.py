@@ -1,13 +1,11 @@
-# File: trianglengin/trianglengin/visualization/core/coord_mapper.py
 import pygame
 
 # Use internal imports
 from ...config import EnvConfig
 from ...core.structs import Triangle
-from ...utils import geometry  # Corrected import path
+from ...utils import geometry
 
 
-# --- Rest of the file remains the same ---
 def _calculate_render_params(
     width: int, height: int, config: EnvConfig
 ) -> tuple[float, float, float, float]:

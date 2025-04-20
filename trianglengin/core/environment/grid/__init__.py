@@ -1,18 +1,18 @@
-# File: trianglengin/trianglengin/core/environment/grid/__init__.py
-# Moved from alphatriangle/environment/grid/__init__.py
-# Updated imports
+# trianglengin/core/environment/grid/__init__.py
 """
-Grid submodule handling the triangular grid structure, data, and logic.
+Modules related to the game grid structure and logic.
+
+Provides:
+- GridData: Class representing the grid state.
+- logic: Module containing grid-related logic (placement, line clearing).
+- line_cache: Module for caching precomputed lines.
+
+See GridData documentation: [grid_data.py](grid_data.py)
+See Grid Logic documentation: [logic.py](logic.py)
+See Line Cache documentation: [line_cache.py](line_cache.py)
 """
 
-# Removed: from .triangle import Triangle # Triangle is in structs now
-from . import logic
+from . import line_cache, logic
 from .grid_data import GridData
 
-# DO NOT import grid_features here. It has been moved up one level
-# to alphatriangle/environment/grid_features.py to break circular dependencies.
-
-__all__ = [
-    "GridData",
-    "logic",
-]
+__all__ = ["GridData", "logic", "line_cache"]

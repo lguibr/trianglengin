@@ -14,8 +14,8 @@ class Application:
     """Main application integrating visualization and interaction for trianglengin."""
 
     def __init__(self, mode: str = "play"):
-        # Use VisConfig from this library now
-        self.vis_config = visualization.VisConfig()
+        # Use DisplayConfig from this library now
+        self.display_config = tg_config.DisplayConfig()  # Use DisplayConfig
         self.env_config = tg_config.EnvConfig()
         self.mode = mode
 
@@ -30,7 +30,10 @@ class Application:
             self.game_state = tg_core.environment.GameState(self.env_config)
             # Create Visualizer using trianglengin visualization
             self.visualizer = visualization.Visualizer(
-                self.screen, self.vis_config, self.env_config, self.fonts
+                self.screen,
+                self.display_config,
+                self.env_config,
+                self.fonts,  # Pass DisplayConfig
             )
             # Create InputHandler using trianglengin interaction
             self.input_handler = interaction.InputHandler(
@@ -46,7 +49,10 @@ class Application:
     def _setup_screen(self) -> pygame.Surface:
         """Initializes the Pygame screen."""
         screen = pygame.display.set_mode(
-            (self.vis_config.SCREEN_WIDTH, self.vis_config.SCREEN_HEIGHT),
+            (
+                self.display_config.SCREEN_WIDTH,
+                self.display_config.SCREEN_HEIGHT,
+            ),  # Use DisplayConfig
             pygame.RESIZABLE,
         )
         # Use a generic name or make APP_NAME part of trianglengin config later
@@ -57,7 +63,7 @@ class Application:
         """Main application loop."""
         logger.info(f"Starting application in {self.mode} mode.")
         while self.running:
-            self.clock.tick(self.vis_config.FPS)
+            self.clock.tick(self.display_config.FPS)  # Use DisplayConfig
 
             # Handle Input using InputHandler
             if self.input_handler:

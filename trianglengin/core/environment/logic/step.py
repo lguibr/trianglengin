@@ -2,7 +2,6 @@
 # Moved from alphatriangle/environment/logic/step.py
 # Updated imports
 import logging
-import random
 from typing import TYPE_CHECKING
 
 # Correct import path for constants from library's structs
@@ -63,18 +62,20 @@ def calculate_reward(
 
 
 def execute_placement(
-    game_state: "GameState", shape_idx: int, r: int, c: int, rng: random.Random
+    game_state: "GameState",
+    shape_idx: int,
+    r: int,
+    c: int,  # Removed rng argument
 ) -> float:
     """
     Places a shape, clears lines, updates game state (NumPy arrays), and calculates reward.
-    Handles batch refilling of shapes.
+    Handles batch refilling of shapes using the game_state's internal RNG.
 
     Args:
         game_state: The current game state (will be modified).
         shape_idx: Index of the shape to place.
         r: Target row for placement.
         c: Target column for placement.
-        rng: Random number generator for shape refilling.
 
     Returns:
         The reward obtained for this step.
@@ -86,10 +87,22 @@ def execute_placement(
 
     # Use the NumPy-based can_place from GridLogic
     if not GridLogic.can_place(game_state.grid_data, shape, r, c):
-        logger.error(f"Invalid placement attempted: Shape {shape_idx} at ({r},{c})")
-        # It's possible this check fails even if valid_actions included it,
-        # especially if the state changed unexpectedly (e.g., in multi-threaded envs, though not the case here).
-        # Returning 0 reward is reasonable.
+        # Log the shape details for debugging
+        logger.error(
+            f"Invalid placement attempted: Shape {shape_idx} ({shape}) at ({r},{c})"
+        )
+        # Log grid state around the target for more context
+        for dr_ctx in range(-1, 2):
+            for dc_ctx in range(-1, 2):
+                rr, cc = r + dr_ctx, c + dc_ctx
+                if game_state.grid_data.valid(rr, cc):
+                    occ = game_state.grid_data.is_occupied(rr, cc)
+                    dea = game_state.grid_data.is_death(rr, cc)
+                    ori = "U" if (rr + cc) % 2 != 0 else "D"
+                    logger.error(
+                        f"  Context ({rr},{cc}): Occ={occ}, Death={dea}, Orient={ori}"
+                    )
+
         return 0.0
 
     # --- Place the shape ---
@@ -98,8 +111,10 @@ def execute_placement(
     # Get color ID from the shape's color
     color_id = COLOR_TO_ID_MAP.get(shape.color, NO_COLOR_ID)
     if color_id == NO_COLOR_ID:
-        logger.warning(f"Shape color {shape.color} not found in COLOR_TO_ID_MAP!")
-        # Assign a default color ID? Or handle as error? Let's use 0 for now.
+        # Use default color 0 if not found, but log warning
+        logger.warning(
+            f"Shape color {shape.color} not found in COLOR_TO_ID_MAP! Using ID 0."
+        )
         color_id = 0
 
     for dr, dc, _ in shape.triangles:
@@ -138,12 +153,14 @@ def execute_placement(
     game_state.triangles_cleared_this_episode += len(unique_coords_cleared)
 
     # --- Update Score (Optional tracking) ---
+    # Score based on placed pieces and cleared triangles (using unique coords count)
     game_state.game_score += placed_count + len(unique_coords_cleared) * 2
 
     # --- Refill shapes if all slots are empty ---
     if all(s is None for s in game_state.shapes):
         logger.debug("All shape slots empty, triggering batch refill.")
-        ShapeLogic.refill_shape_slots(game_state, rng)
+        # Use the game_state's internal RNG for refill
+        ShapeLogic.refill_shape_slots(game_state, game_state._rng)
 
     # --- Check for game over AFTER placement and refill ---
     # Game is over if no valid moves remain for the *new* state

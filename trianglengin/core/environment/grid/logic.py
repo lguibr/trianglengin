@@ -1,6 +1,4 @@
 # File: trianglengin/trianglengin/core/environment/grid/logic.py
-# Moved from alphatriangle/environment/grid/logic.py
-# Updated imports
 import logging
 from typing import TYPE_CHECKING
 
@@ -12,9 +10,6 @@ if TYPE_CHECKING:
     from .grid_data import GridData
 
 logger = logging.getLogger(__name__)
-
-
-# Removed link_neighbors function as it's no longer needed
 
 
 def can_place(grid_data: "GridData", shape: "Shape", r: int, c: int) -> bool:
@@ -105,4 +100,5 @@ def check_and_clear_lines(
             grid_data._occupied_np[rows_idx, cols_idx] = False
             grid_data._color_id_np[rows_idx, cols_idx] = NO_COLOR_ID
 
+    # Return number of lines cleared, unique coords cleared, and the set of cleared lines
     return len(cleared_lines_set), unique_coords_cleared, cleared_lines_set

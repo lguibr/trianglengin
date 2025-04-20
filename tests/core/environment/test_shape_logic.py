@@ -1,6 +1,4 @@
 # File: trianglengin/tests/core/environment/test_shape_logic.py
-# Moved from alphatriangle/tests/environment/test_shape_logic.py
-# Updated imports
 import random
 
 import pytest
@@ -119,3 +117,55 @@ def test_refill_shape_slots_batch_trigger(game_state: GameState) -> None:
     assert game_state.shapes != initial_shapes, (
         "Shapes after refill are identical to initial shapes (unlikely)"
     )
+
+
+# --- ADDED TESTS ---
+def test_get_neighbors():
+    """Test neighbor calculation for up and down triangles."""
+    # Up triangle at (1, 1)
+    up_neighbors = ShapeLogic.get_neighbors(r=1, c=1, is_up=True)
+    # Expected: Left (1,0), Right (1,2), Vertical (Down) (2,1)
+    assert set(up_neighbors) == {(1, 0), (1, 2), (2, 1)}
+
+    # Down triangle at (1, 2)
+    down_neighbors = ShapeLogic.get_neighbors(r=1, c=2, is_up=False)
+    # Expected: Left (1,1), Right (1,3), Vertical (Up) (0,2)
+    assert set(down_neighbors) == {(1, 1), (1, 3), (0, 2)}
+
+
+def test_is_shape_connected_true(simple_shape: Shape):  # Use fixture
+    """Test connectivity for various connected shapes."""
+    # Single triangle
+    shape1 = Shape([(0, 0, True)], (1, 1, 1))
+    assert ShapeLogic.is_shape_connected(shape1)
+
+    # Domino (horizontal) - Down(0,0) connects to Up(0,1)
+    shape2 = Shape([(0, 0, False), (0, 1, True)], (1, 1, 1))
+    assert ShapeLogic.is_shape_connected(shape2)
+
+    # L-shape (from simple_shape fixture) - Down(0,0) connects Up(1,0), Up(1,0) connects Down(1,1)
+    assert ShapeLogic.is_shape_connected(simple_shape)  # Test the fixture directly
+
+    # Empty shape
+    shape4 = Shape([], (1, 1, 1))
+    assert ShapeLogic.is_shape_connected(shape4)
+
+    # More complex connected shape
+    shape5 = Shape(
+        [(0, 0, False), (0, 1, True), (1, 1, False), (1, 0, True)], (1, 1, 1)
+    )
+    assert ShapeLogic.is_shape_connected(shape5)
+
+
+def test_is_shape_connected_false():
+    """Test connectivity for disconnected shapes."""
+    # Two separate triangles
+    shape1 = Shape([(0, 0, True), (2, 2, False)], (1, 1, 1))
+    assert not ShapeLogic.is_shape_connected(shape1)
+
+    # Three triangles, two connected, one separate
+    shape2 = Shape([(0, 0, False), (0, 1, True), (3, 3, True)], (1, 1, 1))
+    assert not ShapeLogic.is_shape_connected(shape2)
+
+
+# --- END ADDED TESTS ---

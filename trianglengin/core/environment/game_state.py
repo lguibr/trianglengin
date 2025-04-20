@@ -1,4 +1,4 @@
-# File: trianglengin/trianglengin/core/environment/game_state.py
+# File: trianglengin/core/environment/game_state.py
 # Moved from alphatriangle/environment/core/game_state.py
 # Updated imports
 import logging
@@ -81,7 +81,8 @@ class GameState:
             return 0.0, True
 
         shape_idx, r, c = decode_action(action_index, self.env_config)
-        reward = execute_placement(self, shape_idx, r, c, self._rng)
+        # Call execute_placement without the rng argument
+        reward = execute_placement(self, shape_idx, r, c)
         self.current_step += 1
 
         if not self.game_over and not self.valid_actions():

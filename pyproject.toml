@@ -1,4 +1,4 @@
-# File: trianglengin/pyproject.toml
+
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
@@ -25,6 +25,8 @@ dependencies = [
     "numpy>=1.20.0",
     "pydantic>=2.0.0",
     "typing_extensions>=4.0.0",
+    "pygame>=2.1.0", # Added Pygame
+    "typer[all]>=0.9.0", # Added Typer for CLI
     # Add other core dependencies as needed (e.g., numba if grid_features moves here later)
     # Keep Ray out for now unless StatsCollector moves here
 ]
@@ -33,7 +35,11 @@ dependencies = [
 "Homepage" = "https://github.com/lguibr/alphatriangle" # Link to the main project for now
 "Bug Tracker" = "https://github.com/lguibr/alphatriangle/issues"
 
-# --- ADDED: Optional Dependencies for Development ---
+# --- ADDED: Script Entry Point ---
+[project.scripts]
+trianglengin = "trianglengin.cli:app"
+# --- END ADDED ---
+
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",
@@ -47,7 +53,6 @@ dev = [
     # Add Ray here if testing StatsCollectorActor locally
     # "ray>=2.8.0",
 ]
-# --- END ADDED ---
 
 [tool.setuptools.packages.find]
 where = ["."] # Search for packages in the root directory
@@ -87,6 +92,9 @@ omit = [
     "trianglengin/config/*", # Config models are mostly declarative
     "trianglengin/utils/types.py", # Simple type aliases
     "trianglengin/core/structs/*", # Simple data structures
+    "trianglengin/app.py", # UI App difficult to cover fully
+    "trianglengin/cli.py", # CLI difficult to cover fully
+    "trianglengin/visualization/core/fonts.py", # Font loading depends on system
     "tests/*", # Exclude tests from coverage report
 ]
 

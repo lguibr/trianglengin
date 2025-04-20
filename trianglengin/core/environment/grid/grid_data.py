@@ -1,22 +1,19 @@
 # File: trianglengin/trianglengin/core/environment/grid/grid_data.py
-# Moved from alphatriangle/environment/grid/grid_data.py
-# Updated imports
 import copy
 import logging
 
 import numpy as np
 
 from ....config import EnvConfig
-from ...structs import NO_COLOR_ID  # Import from library's structs
+from ...structs import NO_COLOR_ID
 
 logger = logging.getLogger(__name__)
 
 
 def _precompute_lines(config: EnvConfig) -> list[list[tuple[int, int]]]:
     """
-    Generates all potential horizontal and diagonal lines based on grid geometry.
+    Generates all potential maximal horizontal and diagonal lines based on grid geometry.
     Returns a list of lines, where each line is a list of (row, col) tuples.
-    This function no longer needs actual Triangle objects.
     """
     lines = []
     rows, cols = config.ROWS, config.COLS
@@ -50,26 +47,26 @@ def _precompute_lines(config: EnvConfig) -> list[list[tuple[int, int]]]:
             # --- Trace Horizontal ---
             if (r_start, c_start, "h") not in visited_in_line:
                 current_line_h = []
-                # Trace left
+                # Trace left to find the true start of the maximal line
                 cr, cc = r_start, c_start
                 while is_valid_playable(cr, cc - 1):
                     cc -= 1
-                # Trace right from the start
+                # Trace right from the true start
                 while is_valid_playable(cr, cc):
-                    if (cr, cc, "h") not in visited_in_line:
-                        current_line_h.append((cr, cc))
-                        visited_in_line.add((cr, cc, "h"))
-                    else:
-                        # If we hit a visited cell, the rest of the line was already processed
-                        break
+                    current_line_h.append((cr, cc))
+                    visited_in_line.add((cr, cc, "h"))
                     cc += 1
+                # Only add the maximal line if long enough
                 if len(current_line_h) >= min_len:
                     lines.append(current_line_h)
+                # Mark intermediate visited cells (redundant due to check above, but safe)
+                # for _, visited_c in current_line_h:
+                #    visited_in_line.add((r_start, visited_c, "h"))
 
             # --- Trace Diagonal TL-BR (Down-Right) ---
             if (r_start, c_start, "d1") not in visited_in_line:
                 current_line_d1 = []
-                # Trace backwards (Up-Left)
+                # Trace backwards (Up-Left) to find the true start
                 cr, cc = r_start, c_start
                 while True:
                     is_up = (cr + cc) % 2 != 0
@@ -78,23 +75,25 @@ def _precompute_lines(config: EnvConfig) -> list[list[tuple[int, int]]]:
                         cr, cc = prev_r, prev_c
                     else:
                         break
-                # Trace forwards
+                # Trace forwards from the true start
+                _start_cr, _start_cc = cr, cc
                 while is_valid_playable(cr, cc):
-                    if (cr, cc, "d1") not in visited_in_line:
-                        current_line_d1.append((cr, cc))
-                        visited_in_line.add((cr, cc, "d1"))
-                    else:
-                        break
+                    current_line_d1.append((cr, cc))
+                    visited_in_line.add((cr, cc, "d1"))
                     is_up = (cr + cc) % 2 != 0
                     next_r, next_c = (cr + 1, cc) if is_up else (cr, cc + 1)
                     cr, cc = next_r, next_c
+                # Only add the maximal line if long enough
                 if len(current_line_d1) >= min_len:
                     lines.append(current_line_d1)
+                # Mark intermediate visited cells
+                # for visited_r, visited_c in current_line_d1:
+                #    visited_in_line.add((visited_r, visited_c, "d1"))
 
             # --- Trace Diagonal BL-TR (Up-Right) ---
             if (r_start, c_start, "d2") not in visited_in_line:
                 current_line_d2 = []
-                # Trace backwards (Down-Left)
+                # Trace backwards (Down-Left) to find the true start
                 cr, cc = r_start, c_start
                 while True:
                     is_up = (cr + cc) % 2 != 0
@@ -103,19 +102,22 @@ def _precompute_lines(config: EnvConfig) -> list[list[tuple[int, int]]]:
                         cr, cc = prev_r, prev_c
                     else:
                         break
-                # Trace forwards
+                # Trace forwards from the true start
+                _start_cr, _start_cc = cr, cc
                 while is_valid_playable(cr, cc):
-                    if (cr, cc, "d2") not in visited_in_line:
-                        current_line_d2.append((cr, cc))
-                        visited_in_line.add((cr, cc, "d2"))
-                    else:
-                        break
+                    current_line_d2.append((cr, cc))
+                    visited_in_line.add((cr, cc, "d2"))
                     is_up = (cr + cc) % 2 != 0
                     next_r, next_c = (cr, cc + 1) if is_up else (cr - 1, cc)
                     cr, cc = next_r, next_c
+                # Only add the maximal line if long enough
                 if len(current_line_d2) >= min_len:
                     lines.append(current_line_d2)
-    # --- End Line Tracing ---
+                # Mark intermediate visited cells
+                # for visited_r, visited_c in current_line_d2:
+                #    visited_in_line.add((visited_r, visited_c, "d2"))
+
+    # --- REMOVED SUBLINE GENERATION ---
 
     # Remove duplicates (lines traced from different start points)
     unique_lines_tuples = {tuple(sorted(line)) for line in lines}
@@ -124,6 +126,7 @@ def _precompute_lines(config: EnvConfig) -> list[list[tuple[int, int]]]:
     # Final filter by length (should be redundant but safe)
     final_lines = [line for line in unique_lines if len(line) >= min_len]
 
+    logger.debug(f"Precomputed {len(final_lines)} potential maximal lines.")
     return final_lines
 
 

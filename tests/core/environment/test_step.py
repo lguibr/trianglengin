@@ -1,4 +1,4 @@
-from time import sleep
+# File: tests/core/environment/test_step.py
 
 import pytest
 
@@ -20,15 +20,10 @@ from trianglengin.core.structs import Shape, Triangle
 def occupy_line(
     grid_data: GridData, line_indices: list[int], config: EnvConfig
 ) -> set[Triangle]:
-    """Helper to occupy triangles for a given line index list."""
-    # occupied_tris: set[Triangle] = set() # Removed unused variable
-    for idx in line_indices:
-        r, c = divmod(idx, config.COLS)
-        # Combine nested if using 'and'
-        if grid_data.valid(r, c) and not grid_data.is_death(r, c):
-            grid_data._occupied_np[r, c] = True
-            # Cannot easily return Triangle objects anymore
-    # Return empty set as Triangle objects are not the primary state
+    """Helper to occupy triangles for a given line index list (DEPRECATED - indices change)."""
+    # This helper is less useful now line indices are not stable
+    # Use occupy_coords instead.
+    print("WARNING: occupy_line fixture is deprecated.")
     return set()
 
 
@@ -49,7 +44,6 @@ def test_calculate_reward_v3_placement_only(
     placed_count = len(simple_shape.triangles)
     unique_coords_cleared: set[tuple[int, int]] = set()
     is_game_over = False
-    # Pass len(unique_coords_cleared) instead of the set itself
     reward = calculate_reward(
         placed_count, len(unique_coords_cleared), is_game_over, default_env_config
     )
@@ -65,10 +59,8 @@ def test_calculate_reward_v3_single_line_clear(
 ):
     """Test reward: placement + line clear, game not over."""
     placed_count = len(simple_shape.triangles)
-    # Simulate a cleared line of 9 unique coordinates
     unique_coords_cleared: set[tuple[int, int]] = {(0, i) for i in range(9)}
     is_game_over = False
-    # Pass len(unique_coords_cleared) instead of the set itself
     reward = calculate_reward(
         placed_count, len(unique_coords_cleared), is_game_over, default_env_config
     )
@@ -85,12 +77,10 @@ def test_calculate_reward_v3_multi_line_clear(
 ):
     """Test reward: placement + multi-line clear (overlapping coords), game not over."""
     placed_count = len(simple_shape.triangles)
-    # Simulate two lines sharing coordinate (0,0)
     line1_coords = {(0, i) for i in range(9)}
     line2_coords = {(i, 0) for i in range(5)}
-    unique_coords_cleared = line1_coords.union(line2_coords)  # Union handles uniqueness
+    unique_coords_cleared = line1_coords.union(line2_coords)
     is_game_over = False
-    # Pass len(unique_coords_cleared) instead of the set itself
     reward = calculate_reward(
         placed_count, len(unique_coords_cleared), is_game_over, default_env_config
     )
@@ -109,7 +99,6 @@ def test_calculate_reward_v3_game_over(
     placed_count = len(simple_shape.triangles)
     unique_coords_cleared: set[tuple[int, int]] = set()
     is_game_over = True
-    # Pass len(unique_coords_cleared) instead of the set itself
     reward = calculate_reward(
         placed_count, len(unique_coords_cleared), is_game_over, default_env_config
     )
@@ -127,7 +116,6 @@ def test_calculate_reward_v3_game_over_with_clear(
     placed_count = len(simple_shape.triangles)
     unique_coords_cleared: set[tuple[int, int]] = {(0, i) for i in range(9)}
     is_game_over = True
-    # Pass len(unique_coords_cleared) instead of the set itself
     reward = calculate_reward(
         placed_count, len(unique_coords_cleared), is_game_over, default_env_config
     )
@@ -139,34 +127,35 @@ def test_calculate_reward_v3_game_over_with_clear(
     assert reward == pytest.approx(expected_reward)
 
 
-# --- Test execute_placement with new reward ---
+# --- Test execute_placement ---
 
 
 def test_execute_placement_simple_no_refill_v3(
-    game_state: GameState,  # Changed fixture
+    game_state: GameState,
 ):
-    """Test placing a shape without clearing lines, verify reward and NO immediate refill."""
-    gs = game_state  # Use default game state
+    """Test placing a shape without clearing lines, verify stats."""
+    gs = game_state
     config = gs.env_config
-    shape_idx = 0
-    # Ensure there are shapes to work with
-    if not gs.shapes[0] or not gs.shapes[1] or not gs.shapes[2]:
-        gs.reset()  # Reset to get shapes
-        if not gs.shapes[0] or not gs.shapes[1] or not gs.shapes[2]:
-            pytest.skip("Requires initial shapes in game state")
+    shape_idx = -1
+    shape_to_place = None
+    for i, s in enumerate(gs.shapes):
+        if s:
+            shape_idx = i
+            shape_to_place = s
+            break
+    if shape_idx == -1 or not shape_to_place:
+        pytest.skip("Requires at least one initial shape in game state")
 
-    original_shape_in_slot_1 = gs.shapes[1].copy() if gs.shapes[1] else None
-    original_shape_in_slot_2 = gs.shapes[2].copy() if gs.shapes[2] else None
-    shape_to_place = gs.shapes[shape_idx]
-    assert shape_to_place is not None
-    placed_count = len(shape_to_place.triangles)
+    original_other_shapes = [
+        s.copy() if s else None for j, s in enumerate(gs.shapes) if j != shape_idx
+    ]
+    placed_count_expected = len(shape_to_place.triangles)
 
-    # Find a valid placement spot (e.g., center-ish)
-    r, c = config.ROWS // 2, config.COLS // 2
-    # Adjust if the default spot isn't valid for the shape
+    r, c = -1, -1
     found_spot = False
     for r_try in range(config.ROWS):
-        for c_try in range(config.COLS):
+        start_c, end_c = config.PLAYABLE_RANGE_PER_ROW[r_try]
+        for c_try in range(start_c, end_c):
             if GridLogic.can_place(gs.grid_data, shape_to_place, r_try, c_try):
                 r, c = r_try, c_try
                 found_spot = True
@@ -174,55 +163,28 @@ def test_execute_placement_simple_no_refill_v3(
         if found_spot:
             break
     if not found_spot:
-        pytest.skip(
-            f"Could not find valid placement for shape {shape_idx} in initial state"
-        )
+        pytest.skip(f"Could not find valid placement for shape {shape_idx}")
 
-    # Add missing rng argument
-    reward, cleared_count, placed_count_ret = execute_placement(
-        gs, shape_idx, r, c, gs._rng
-    )
-    assert placed_count == placed_count_ret
-    assert cleared_count == 0
+    initial_score = gs.game_score()
+    cleared_count_ret, placed_count_ret = execute_placement(gs, shape_idx, r, c)
 
-    # Verify reward (placement + survival)
-    expected_reward = (
-        placed_count * config.REWARD_PER_PLACED_TRIANGLE + config.REWARD_PER_STEP_ALIVE
-    )
-    assert reward == pytest.approx(expected_reward)
-    # Score is still tracked separately
-    # Score update logic: placed_count + len(unique_coords_cleared) * 2
-    # Since no lines cleared, score should just be placed_count
-    assert gs.game_score() == placed_count  # Use game_score() method
-
-    # Verify grid state using NumPy arrays
+    assert placed_count_ret == placed_count_expected
+    assert cleared_count_ret == 0
+    expected_score_increase = placed_count_expected + cleared_count_ret * 2
+    assert gs.game_score() == initial_score + expected_score_increase
     for dr, dc, _ in shape_to_place.triangles:
-        tri_r, tri_c = r + dr, c + dc
-        assert gs.grid_data._occupied_np[tri_r, tri_c]
-        # Cannot easily check color ID without map here, trust placement logic
-
-    # Verify shape slot is now EMPTY
+        assert gs.grid_data._occupied_np[r + dr, c + dc]
     assert gs.shapes[shape_idx] is None
-
-    # --- Verify NO REFILL ---
-    assert gs.shapes[1] == original_shape_in_slot_1
-    assert gs.shapes[2] == original_shape_in_slot_2
-
-    # Check internal step stats (if they exist and are updated by execute_placement)
-    # assert gs.pieces_placed_this_step == placed_count # Check if these attributes exist
-    # assert gs.triangles_cleared_this_step == 0
-
-    assert not gs.is_over()
+    current_other_shapes = [s for j, s in enumerate(gs.shapes) if j != shape_idx]
+    assert current_other_shapes == original_other_shapes
 
 
 def test_execute_placement_clear_line_no_refill_v3(
-    game_state: GameState,  # Changed fixture
+    game_state: GameState,
 ):
-    """Test placing a shape that clears a line, verify reward and NO immediate refill."""
-    gs = game_state  # Use default game state
-    config = gs.env_config
+    """Test placing a shape that clears a line, verify stats."""
+    gs = game_state
 
-    # Find a shape that is a single triangle (more likely to fit)
     shape_idx = -1
     shape_single = None
     for i, s in enumerate(gs.shapes):
@@ -231,115 +193,81 @@ def test_execute_placement_clear_line_no_refill_v3(
             shape_single = s
             break
     if shape_idx == -1 or not shape_single:
-        gs.reset()  # Try resetting to get different shapes
+        gs.reset()
         for i, s in enumerate(gs.shapes):
             if s and len(s.triangles) == 1:
                 shape_idx = i
                 shape_single = s
                 break
         if shape_idx == -1 or not shape_single:
-            pytest.skip("Requires a single-triangle shape in initial state")
+            pytest.skip("Requires a single-triangle shape")
 
-    placed_count = len(shape_single.triangles)
-    # Store original shapes from other slots
+    placed_count_expected = len(shape_single.triangles)
     original_other_shapes = [
         s.copy() if s else None for j, s in enumerate(gs.shapes) if j != shape_idx
     ]
 
-    # Pre-occupy a line in the default grid (e.g., row 1, cols 3-11)
-    # Ensure the line exists in potential_lines (now _lines)
+    # Find any precomputed maximal line
     target_line_coords_tuple = None
-    for line_tuple in gs.grid_data._lines:  # Use _lines
-        coords = list(line_tuple)
-        # Find a horizontal line in row 1 with length >= MIN_LINE_LENGTH
-        if len(coords) >= config.MIN_LINE_LENGTH and all(r == 1 for r, c in coords):
-            target_line_coords_tuple = line_tuple
-            break
-    if not target_line_coords_tuple:
-        pytest.skip("Could not find a suitable line in row 1 in _lines")
-
+    if not gs.grid_data._lines:
+        pytest.skip("No precomputed lines found.")
+    # Just pick the first one for the test
+    target_line_coords_tuple = gs.grid_data._lines[0]
     target_line_coords = frozenset(target_line_coords_tuple)
-    coords_list = list(target_line_coords_tuple)
-    # Find a coordinate in the line where the single shape can be placed
+
     r, c = -1, -1
-    for r_place, c_place in coords_list:
+    placement_coord = None
+    for r_place, c_place in target_line_coords_tuple:
         if GridLogic.can_place(gs.grid_data, shape_single, r_place, c_place):
             r, c = r_place, c_place
+            placement_coord = (r, c)
             break
-    if r == -1:
+    if placement_coord is None:
         pytest.skip(
-            f"Could not find valid placement for shape {shape_idx} on target line {target_line_coords}"
+            f"Could not find valid placement for shape {shape_idx} on target line"
         )
 
-    # Occupy all coords in the line EXCEPT the placement spot (r,c)
-    line_coords_to_occupy = target_line_coords - {(r, c)}
+    line_coords_to_occupy = target_line_coords - {placement_coord}
     occupy_coords(gs.grid_data, line_coords_to_occupy)
+    initial_score = gs.game_score()
 
-    # Add missing rng argument
-    reward, cleared_count, placed_count_ret = execute_placement(
-        gs, shape_idx, r, c, gs._rng
-    )
-    assert placed_count == placed_count_ret
-    assert cleared_count == len(target_line_coords)
+    cleared_count_ret, placed_count_ret = execute_placement(gs, shape_idx, r, c)
 
-    # Verify reward (placement + line clear + survival)
-    expected_reward = (
-        placed_count * config.REWARD_PER_PLACED_TRIANGLE
-        + len(target_line_coords) * config.REWARD_PER_CLEARED_TRIANGLE
-        + config.REWARD_PER_STEP_ALIVE
-    )
-    assert reward == pytest.approx(expected_reward)
-    # Score update logic: placed_count + len(unique_coords_cleared) * 2
-    assert (
-        gs.game_score() == placed_count + len(target_line_coords) * 2
-    )  # Use game_score()
-
-    # Verify line is cleared using NumPy array
+    assert placed_count_ret == placed_count_expected
+    assert cleared_count_ret == len(target_line_coords)
+    expected_score_increase = placed_count_expected + cleared_count_ret * 2
+    assert gs.game_score() == initial_score + expected_score_increase
     for row, col in target_line_coords:
         assert not gs.grid_data._occupied_np[row, col]
-
-    # Verify shape slot is now EMPTY
     assert gs.shapes[shape_idx] is None
-
-    # --- Verify NO REFILL ---
     current_other_shapes = [s for j, s in enumerate(gs.shapes) if j != shape_idx]
     assert current_other_shapes == original_other_shapes
-
-    # Check internal step stats (if they exist)
-    # assert gs.pieces_placed_this_step == placed_count
-    # assert gs.triangles_cleared_this_step == len(target_line_coords)
-
-    assert not gs.is_over()
 
 
 def test_execute_placement_batch_refill_v3(
     game_state: GameState, mocker: MockerFixture
-):  # Changed fixture, added mocker
-    """Test that placing the last shape triggers a refill and correct reward."""
-    gs = game_state  # Use default game state
+):
+    """Test execute_placement when placing the last shape - refill handled by caller."""
+    gs = game_state
     config = gs.env_config
-
-    # Ensure we have 3 shapes initially
+    if config.NUM_SHAPE_SLOTS != 3:
+        pytest.skip("Test requires 3 shape slots")
     if len(gs.shapes) != 3 or any(s is None for s in gs.shapes):
-        gs.reset()  # Reset to get shapes
+        gs.reset()
         if len(gs.shapes) != 3 or any(s is None for s in gs.shapes):
             pytest.skip("Could not ensure 3 initial shapes")
 
-    initial_shapes_copy = [s.copy() for s in gs.shapes if s]
-
-    # Find valid placements for the 3 shapes sequentially
     placements = []
-    temp_gs = gs.copy()  # Simulate placements without modifying original gs yet
+    temp_gs = gs.copy()
     placed_indices = set()
-
     for i in range(config.NUM_SHAPE_SLOTS):
         shape_to_place = temp_gs.shapes[i]
         if not shape_to_place:
-            continue  # Should not happen with setup above
-
+            continue
         found_spot = False
         for r_try in range(config.ROWS):
-            for c_try in range(config.COLS):
+            start_c, end_c = config.PLAYABLE_RANGE_PER_ROW[r_try]
+            for c_try in range(start_c, end_c):
                 if GridLogic.can_place(temp_gs.grid_data, shape_to_place, r_try, c_try):
                     placements.append(
                         {
@@ -349,7 +277,6 @@ def test_execute_placement_batch_refill_v3(
                             "count": len(shape_to_place.triangles),
                         }
                     )
-                    # Simulate placement in temp_gs
                     for dr, dc, _ in shape_to_place.triangles:
                         if temp_gs.grid_data.valid(r_try + dr, c_try + dc):
                             temp_gs.grid_data._occupied_np[r_try + dr, c_try + dc] = (
@@ -363,171 +290,83 @@ def test_execute_placement_batch_refill_v3(
                 break
         if not found_spot:
             pytest.skip(f"Could not find sequential placement for shape {i}")
-
     if len(placements) != config.NUM_SHAPE_SLOTS:
         pytest.skip("Could not find valid sequential placements for all 3 shapes")
 
-    # Now execute placements on the actual game state
-    # Place first shape
     p1 = placements[0]
-    # Add missing rng argument
-    reward1, _, _ = execute_placement(gs, p1["idx"], p1["r"], p1["c"], gs._rng)
+    _, _ = execute_placement(gs, p1["idx"], p1["r"], p1["c"])
     assert gs.shapes[p1["idx"]] is None
-    assert gs.shapes[placements[1]["idx"]] is not None  # Check other slots remain
+    assert gs.shapes[placements[1]["idx"]] is not None
     assert gs.shapes[placements[2]["idx"]] is not None
 
-    # Place second shape
     p2 = placements[1]
-    # Add missing rng argument
-    reward2, _, _ = execute_placement(gs, p2["idx"], p2["r"], p2["c"], gs._rng)
+    _, _ = execute_placement(gs, p2["idx"], p2["r"], p2["c"])
     assert gs.shapes[p1["idx"]] is None
     assert gs.shapes[p2["idx"]] is None
     assert gs.shapes[placements[2]["idx"]] is not None
 
-    # --- Mock check_and_clear_lines before placing the third shape ---
     mock_clear = mocker.patch(
         "trianglengin.core.environment.grid.logic.check_and_clear_lines",
-        return_value=(0, set(), set()),  # Simulate no lines cleared for 3rd placement
+        return_value=(0, set(), set()),
     )
 
-    # Place third shape (triggers refill)
     p3 = placements[2]
-    # Add missing rng argument
-    reward3, cleared3, placed3 = execute_placement(
-        gs, p3["idx"], p3["r"], p3["c"], gs._rng
-    )
-    assert cleared3 == 0  # Due to mock
+    cleared3, placed3 = execute_placement(gs, p3["idx"], p3["r"], p3["c"])
+    assert cleared3 == 0
     assert placed3 == p3["count"]
-
-    # Game over check happens *after* execute_placement in GameState.step
-    # We need to check if the game *would* be over if not for the refill
-    is_game_over_after_step = not gs.valid_actions(force_recalculate=True)
-
-    expected_reward3 = calculate_reward(
-        placed_count=placed3,
-        cleared_count=cleared3,
-        is_game_over=is_game_over_after_step,  # Check potential game over state
-        config=config,
-    )
-    assert reward3 == pytest.approx(expected_reward3)
-    mock_clear.assert_called_once()  # Verify mock was used
-    sleep(0.01)  # Allow time for refill to happen (though it should be synchronous)
-
-    # --- Verify REFILL happened ---
-    assert all(s is not None for s in gs.shapes), "Not all slots were refilled"
-    # Check that shapes are different (probabilistically)
-    assert gs.shapes != initial_shapes_copy, (
-        "Shapes after refill are identical to initial shapes (unlikely)"
-    )
-
-    # Check internal step stats (if they exist)
-    # assert gs.pieces_placed_this_step == 3 # This would be total over steps, not just last
-    assert not gs.is_over()  # Should not be over because refill provided new shapes
+    mock_clear.assert_called_once()
+    assert all(s is None for s in gs.shapes)
 
 
-# Add mocker fixture to the test signature
 def test_execute_placement_game_over_v3(game_state: GameState, mocker: MockerFixture):
-    """Test reward when placement leads to game over, mocking line clears."""
+    """Test execute_placement when placement leads to game over state - reward handled by caller."""
     config = game_state.env_config
-    # Fill grid almost completely using NumPy arrays
     playable_mask = ~game_state.grid_data._death_np
     game_state.grid_data._occupied_np[playable_mask] = True
 
-    # Make one spot empty (ensure it's playable and matches a shape)
     empty_r, empty_c = -1, -1
     shape_to_place = None
     shape_idx = -1
-
-    # Find a single down triangle shape and a place for it
-    for idx, s in enumerate(game_state.shapes):
-        if s and len(s.triangles) == 1 and not s.triangles[0][2]:  # Single Down
-            shape_to_place = s
-            shape_idx = idx
-            break
-    if not shape_to_place:
-        # Force a shape if none found
-        shape_idx = 0
-        shape_to_place = Shape([(0, 0, False)], (255, 0, 0))
-        game_state.shapes[shape_idx] = shape_to_place
-
-    # Find an empty spot for this shape
     found_spot = False
-    for r_try in range(config.ROWS):
-        for c_try in range(config.COLS):
-            # Check if cell is playable, empty, and matches orientation
-            if (
-                not game_state.grid_data._death_np[r_try, c_try]
-                # and not game_state.grid_data._occupied_np[r_try, c_try] # Already set above
-                and (r_try + c_try) % 2 == 0
-            ):  # Down cell
-                empty_r, empty_c = r_try, c_try
-                game_state.grid_data._occupied_np[empty_r, empty_c] = (
-                    False  # Ensure it's empty
-                )
-                found_spot = True
+    for idx, s in enumerate(game_state.shapes):
+        if not s:
+            continue
+        for r_try in range(config.ROWS):
+            start_c, end_c = config.PLAYABLE_RANGE_PER_ROW[r_try]
+            for c_try in range(start_c, end_c):
+                if not game_state.grid_data._death_np[r_try, c_try]:
+                    original_state = game_state.grid_data._occupied_np[r_try, c_try]
+                    game_state.grid_data._occupied_np[r_try, c_try] = False
+                    if GridLogic.can_place(game_state.grid_data, s, r_try, c_try):
+                        shape_to_place = s
+                        shape_idx = idx
+                        empty_r, empty_c = r_try, c_try
+                        found_spot = True
+                        break
+                    else:
+                        game_state.grid_data._occupied_np[r_try, c_try] = original_state
+            if found_spot:
                 break
         if found_spot:
             break
-
     if not found_spot:
-        pytest.skip("Could not find suitable empty spot for game over test")
+        pytest.skip("Could not find suitable shape and empty spot")
 
-    # Ensure grid is full except for this one spot
     game_state.grid_data._occupied_np[playable_mask] = True
     game_state.grid_data._occupied_np[empty_r, empty_c] = False
 
-    placed_count = len(shape_to_place.triangles)
-
-    # --- Modify setup to prevent refill ---
-    # Make other shapes unplaceable (or remove them)
-    unplaceable_shape = Shape([(0, 0, False), (1, 0, False), (2, 0, False)], (1, 1, 1))
-    for i in range(config.NUM_SHAPE_SLOTS):
-        if i != shape_idx:
-            game_state.shapes[i] = unplaceable_shape  # Make other shapes unplaceable
-    # --- End modification ---
-
-    assert GridLogic.can_place(game_state.grid_data, shape_to_place, empty_r, empty_c)
-
-    # --- Mock check_and_clear_lines ---
-    # Patch the function within the logic module where execute_placement imports it from
+    placed_count_expected = len(shape_to_place.triangles)
     mock_clear = mocker.patch(
         "trianglengin.core.environment.grid.logic.check_and_clear_lines",
-        return_value=(0, set(), set()),  # Simulate no lines cleared
+        return_value=(0, set(), set()),
     )
-    # --- End Mock ---
 
-    # Execute placement - this should fill the last spot and trigger game over
-    # Add missing rng argument
-    reward, cleared_count, placed_count_ret = execute_placement(
-        game_state, shape_idx, empty_r, empty_c, game_state._rng
+    cleared_count_ret, placed_count_ret = execute_placement(
+        game_state, shape_idx, empty_r, empty_c
     )
-    assert placed_count == placed_count_ret
-    assert cleared_count == 0  # Due to mock
 
-    # Verify the mock was called (optional but good practice)
+    assert placed_count_ret == placed_count_expected
+    assert cleared_count_ret == 0
     mock_clear.assert_called_once()
-
-    # Verify game is over
-    # The game over check happens *after* execute_placement in game_state.step
-    # We need to manually check the condition here or call valid_actions
-    # Force recalculation of valid actions to update game over state
-    final_valid_actions = game_state.valid_actions(force_recalculate=True)
-    if not final_valid_actions:
-        game_state.force_game_over(
-            "No valid actions available after placement."
-        )  # Manually set if needed
-
-    assert game_state.is_over(), (
-        "Game should be over after placing the final piece with no other valid moves"
-    )
-
-    # Verify reward (placement + game over penalty)
-    # is_game_over=True because we asserted game_state.is_over()
-    expected_reward = calculate_reward(
-        placed_count=placed_count,
-        cleared_count=cleared_count,
-        is_game_over=True,
-        config=config,
-    )
-    # Use a slightly larger tolerance if needed, but approx should work
-    assert reward == pytest.approx(expected_reward)
+    assert game_state.grid_data._occupied_np[playable_mask].all()
+    assert game_state.shapes[shape_idx] is None

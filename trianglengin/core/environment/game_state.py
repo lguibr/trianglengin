@@ -11,11 +11,13 @@ from trianglengin.core.environment.action_codec import (
 )
 from trianglengin.core.environment.grid.grid_data import GridData
 from trianglengin.core.environment.logic.actions import get_valid_actions
-from trianglengin.core.environment.logic.step import execute_placement
+
+# Import calculate_reward and execute_placement from step logic
+from trianglengin.core.environment.logic.step import calculate_reward, execute_placement
 from trianglengin.core.environment.shapes import logic as ShapeLogic
 
 if TYPE_CHECKING:
-    from trianglengin.core.structs.shape import Shape  # Corrected import path
+    from trianglengin.core.structs.shape import Shape
 
 
 log = logging.getLogger(__name__)
@@ -38,8 +40,6 @@ class GameState:
         self._game_over_reason: str | None = None
         self.current_step: int = 0
         self._valid_actions_cache: set[ActionType] | None = None
-        self.triangles_cleared_this_step: int = 0
-        self.pieces_placed_this_step: int = 0
         self.reset()
 
     def reset(self) -> None:
@@ -50,12 +50,9 @@ class GameState:
         self._game_over = False
         self._game_over_reason = None
         self.current_step = 0
-        self.triangles_cleared_this_step = 0
-        self.pieces_placed_this_step = 0
         self._valid_actions_cache = None
-        ShapeLogic.refill_shape_slots(self, self._rng)
-        _ = self.valid_actions()
-        if not self._valid_actions_cache:
+        ShapeLogic.refill_shape_slots(self, self._rng)  # Initial fill
+        if not self.valid_actions():  # Check if initial state is game over
             self._game_over = True
             self._game_over_reason = "No valid actions available at start."
             log.warning(self._game_over_reason)
@@ -63,39 +60,73 @@ class GameState:
     def step(self, action_index: ActionType) -> tuple[float, bool]:
         """
         Performs one game step based on the chosen action.
+        Handles placement, line clearing, scoring, refilling, and game over checks.
         Returns: (reward, done)
-        Raises: ValueError if action is invalid.
+        Raises: ValueError if action is invalid or placement fails.
         """
         if self.is_over():
             log.warning("Attempted to step in a game that is already over.")
             return 0.0, True
 
-        if action_index not in self.valid_actions():
+        # Check action validity before execution
+        current_valid_actions = self.valid_actions()
+        if action_index not in current_valid_actions:
             log.error(
-                f"Invalid action {action_index} provided. Valid: {self.valid_actions()}"
+                f"Invalid action {action_index} provided. Valid: {current_valid_actions}"
             )
             raise ValueError("Action is not in the set of valid actions")
 
         shape_idx, r, c = decode_action(action_index, self.env_config)
 
-        # --- Execute Placement ---
-        reward: float
-        cleared_count: int
-        placed_count: int
-        # Add missing self._rng argument
-        reward, cleared_count, placed_count = execute_placement(
-            self, shape_idx, r, c, self._rng
-        )
-        # --- End Execute Placement ---
+        # --- Execute Placement and Get Stats ---
+        try:
+            # execute_placement now only returns counts and raises error on failure
+            cleared_count, placed_count = execute_placement(self, shape_idx, r, c)
+        except (ValueError, IndexError) as e:
+            # Catch errors from execute_placement (e.g., invalid placement attempt)
+            log.critical(
+                f"Critical error during placement execution: {e}", exc_info=True
+            )
+            # Force game over with a penalty
+            self.force_game_over(f"Placement execution error: {e}")
+            # Return penalty, game is over
+            return calculate_reward(0, 0, True, self.env_config), True
+
+        # --- Refill shapes IF AND ONLY IF all slots are now empty ---
+        if all(s is None for s in self.shapes):
+            log.debug("All shape slots empty after placement, triggering refill.")
+            ShapeLogic.refill_shape_slots(self, self._rng)
+            # Refill might make new actions available, so clear cache before final check
+            self._valid_actions_cache = None
+        else:
+            # Invalidate cache anyway as grid state or shapes list changed
+            self._valid_actions_cache = None
 
         self.current_step += 1
-        self._valid_actions_cache = None  # Clear cache
 
-        if not self.valid_actions():
+        # --- Final Game Over Check ---
+        # Check if any valid actions exist *after* placement and potential refill.
+        # Calling valid_actions() populates the cache and returns the set.
+        has_valid_moves_now = bool(self.valid_actions())
+
+        # Update the game over state based on the check
+        is_final_step_game_over = not has_valid_moves_now
+        if is_final_step_game_over and not self._game_over:
             self._game_over = True
-            self._game_over_reason = "No valid actions available."
+            self._game_over_reason = "No valid actions available after step."
             log.info(f"Game over at step {self.current_step}: {self._game_over_reason}")
+        # Note: If game was already over, self._game_over remains True
 
+        # --- Calculate Reward ---
+        # Reward depends on placement/clear counts and the final game over state for THIS step
+        reward = calculate_reward(
+            placed_count=placed_count,
+            cleared_count=cleared_count,
+            is_game_over=self._game_over,  # Use the definitive game over state
+            config=self.env_config,
+        )
+
+        # Return the calculated reward and the definitive game over status
         return reward, self._game_over
 
     def valid_actions(self, force_recalculate: bool = False) -> set[ActionType]:
@@ -103,36 +134,39 @@ class GameState:
         Returns a set of valid encoded action indices for the current state.
         Uses a cache for performance unless force_recalculate is True.
         """
-        if self._valid_actions_cache is None or force_recalculate:
-            if self._game_over and not force_recalculate:
-                # If game is over and not forcing, return empty set immediately
-                # and ensure cache reflects this.
-                self._valid_actions_cache = set()
-                return self._valid_actions_cache
-            else:
-                # Calculate fresh valid actions
-                current_valid_actions = get_valid_actions(self)
-                # Only update cache if not forcing
-                if not force_recalculate:
-                    self._valid_actions_cache = current_valid_actions
-                # Return the freshly calculated set
-                return current_valid_actions
+        if not force_recalculate and self._valid_actions_cache is not None:
+            return self._valid_actions_cache
 
-        # Return cached set if available and not forcing recalculation
-        # Add type assertion for mypy if needed, though logic should ensure it's a set here
-        # assert self._valid_actions_cache is not None
-        return self._valid_actions_cache
+        # If game is already marked as over, no need to calculate, return empty set
+        if self._game_over:
+            if (
+                self._valid_actions_cache is None
+            ):  # Ensure cache is set if accessed after forced over
+                self._valid_actions_cache = set()
+            return set()
+
+        # Calculate fresh valid actions
+        current_valid_actions = get_valid_actions(self)
+        # Update cache before returning
+        self._valid_actions_cache = current_valid_actions
+        return current_valid_actions
 
     def is_over(self) -> bool:
-        """Checks if the game is over."""
-        if self._game_over:
+        """Checks if the game is over by checking for valid actions."""
+        if self._game_over:  # If already marked, return true
             return True
-        # Check valid_actions (which updates cache if None)
-        if not self.valid_actions():
+        # If not marked, check if valid actions exist. This call populates cache.
+        has_valid_actions = bool(self.valid_actions())
+        if not has_valid_actions:
+            # If no actions found, mark game as over now
             self._game_over = True
-            if not self._game_over_reason:
+            if not self._game_over_reason:  # Set reason if not already set
                 self._game_over_reason = "No valid actions available."
+            log.info(
+                f"Game determined over by is_over() check: {self._game_over_reason}"
+            )
             return True
+        # If actions exist, game is not over
         return False
 
     def get_outcome(self) -> float:
@@ -151,7 +185,7 @@ class GameState:
         """Forces the game to end immediately."""
         self._game_over = True
         self._game_over_reason = reason
-        self._valid_actions_cache = set()
+        self._valid_actions_cache = set()  # Ensure cache is cleared
         log.warning(f"Game forced over: {reason}")
 
     def copy(self) -> "GameState":
@@ -167,8 +201,6 @@ class GameState:
         new_state._game_over = self._game_over
         new_state._game_over_reason = self._game_over_reason
         new_state.current_step = self.current_step
-        new_state.triangles_cleared_this_step = self.triangles_cleared_this_step
-        new_state.pieces_placed_this_step = self.pieces_placed_this_step
         new_state._valid_actions_cache = (
             self._valid_actions_cache.copy()
             if self._valid_actions_cache is not None

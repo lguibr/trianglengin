@@ -13,8 +13,6 @@ class EnvConfig(BaseModel):
 
     ROWS: int = Field(default=8, gt=0)
     COLS: int = Field(default=15, gt=0)
-    # Replaced COLS_PER_ROW with PLAYABLE_RANGE_PER_ROW
-    # Default centers the playable area within COLS
     PLAYABLE_RANGE_PER_ROW: list[tuple[int, int]] = Field(
         default=[
             (3, 12),  # 9 cols, centered in 15
@@ -28,7 +26,7 @@ class EnvConfig(BaseModel):
         ]
     )
     NUM_SHAPE_SLOTS: int = Field(default=3, gt=0)
-    MIN_LINE_LENGTH: int = Field(default=3, gt=0)
+    # REMOVED: MIN_LINE_LENGTH
 
     # --- Reward System Constants (v3) ---
     REWARD_PER_PLACED_TRIANGLE: float = Field(default=0.01)
@@ -43,12 +41,13 @@ class EnvConfig(BaseModel):
         cls, v: list[tuple[int, int]], info
     ) -> list[tuple[int, int]]:
         """Validates PLAYABLE_RANGE_PER_ROW."""
-        data = info.data if info.data else info.values
+        # Pydantic v2 uses 'values' in validator context
+        data = getattr(info, "data", None) or getattr(info, "values", {})
+
         rows = data.get("ROWS")
-        cols = data.get("COLS")  # Need COLS for range check
+        cols = data.get("COLS")
 
         if rows is None or cols is None:
-            # Cannot validate fully if ROWS or COLS not present yet
             return v
 
         if len(v) != rows:
@@ -65,10 +64,11 @@ class EnvConfig(BaseModel):
                 raise ValueError(
                     f"Row {i}: end_col ({end}) invalid. Must be > start_col ({start}) and <= COLS ({cols})."
                 )
-            if end - start <= 0:
-                raise ValueError(
-                    f"Row {i}: Playable range width must be positive ({start}, {end})."
-                )
+            # Allow zero width ranges (rows that are entirely death zones)
+            # if end - start <= 0:
+            #     raise ValueError(
+            #         f"Row {i}: Playable range width must be positive ({start}, {end})."
+            #     )
 
         return v
 
@@ -84,23 +84,21 @@ class EnvConfig(BaseModel):
                 raise ValueError(
                     f"COLS ({self.COLS}) must be >= the maximum end_col in PLAYABLE_RANGE_PER_ROW ({max_end_col})"
                 )
-        elif not hasattr(self, "PLAYABLE_RANGE_PER_ROW"):
-            # Should not happen due to default, but handle defensively
-            pass
         return self
 
     @computed_field  # type: ignore[misc]
     @property
     def ACTION_DIM(self) -> int:
         """Total number of possible actions (shape_slot * row * col)."""
-        # Action space covers the full grid dimensions, validity checked later.
+        # Ensure attributes exist before calculating
         if (
             hasattr(self, "NUM_SHAPE_SLOTS")
             and hasattr(self, "ROWS")
             and hasattr(self, "COLS")
         ):
             return self.NUM_SHAPE_SLOTS * self.ROWS * self.COLS
-        return 0
+        return 0  # Should not happen with pydantic defaults
 
 
+# Ensure model is rebuilt after computed_field definition
 EnvConfig.model_rebuild(force=True)

@@ -1,15 +1,17 @@
+# trianglengin/core/environment/logic/step.py
 import logging
-import random
-from typing import TYPE_CHECKING  # Added Set, Tuple
+from typing import TYPE_CHECKING
 
-from trianglengin.core.environment import shapes as ShapeLogic
+# Import shapes module itself for ShapeLogic reference if needed later,
+# though direct calls are used here.
 from trianglengin.core.environment.grid import logic as GridLogic
 from trianglengin.core.structs.constants import COLOR_TO_ID_MAP, NO_COLOR_ID
 
 if TYPE_CHECKING:
+    # Keep EnvConfig import for reward calculation
     from trianglengin.config import EnvConfig
     from trianglengin.core.environment.game_state import GameState
-    from trianglengin.core.environment.grid.line_cache import Coord  # Import Coord
+    from trianglengin.core.environment.grid.line_cache import Coord
 
 
 logger = logging.getLogger(__name__)
@@ -17,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 def calculate_reward(
     placed_count: int,
-    cleared_count: int,  # Expect int, not set
+    cleared_count: int,
     is_game_over: bool,
     config: "EnvConfig",
 ) -> float:
@@ -58,111 +60,75 @@ def calculate_reward(
 
 
 def execute_placement(
-    game_state: "GameState", shape_idx: int, r: int, c: int, rng: random.Random
-) -> tuple[float, int, int]:
+    game_state: "GameState", shape_idx: int, r: int, c: int
+) -> tuple[int, int]:
     """
-    Places a shape, clears lines, updates game state, triggers refill, and calculates reward.
+    Places a shape, clears lines, and updates grid/score state.
+    Refill logic and reward calculation are handled by the caller (GameState.step).
 
     Args:
         game_state: The current game state (will be modified).
         shape_idx: Index of the shape to place.
         r: Target row for placement.
         c: Target column for placement.
-        rng: Random number generator for shape refilling.
 
     Returns:
-        Tuple[float, int, int]: (step_reward, cleared_triangle_count, placed_triangle_count)
+        Tuple[int, int]: (cleared_triangle_count, placed_triangle_count)
+                         Stats needed for reward calculation.
+    Raises:
+        ValueError: If placement is invalid (should be pre-checked).
+        IndexError: If shape_idx is invalid.
     """
+    if not (0 <= shape_idx < len(game_state.shapes)):
+        raise IndexError(f"Invalid shape index: {shape_idx}")
+
     shape = game_state.shapes[shape_idx]
     if not shape:
+        # This case should ideally be prevented by GameState.step checking valid_actions first.
         logger.error(f"Attempted to place an empty shape slot: {shape_idx}")
-        # Return zero reward and counts if shape is missing
-        return 0.0, 0, 0
+        raise ValueError("Cannot place an empty shape slot.")
 
-    # Check placement validity using GridLogic
+    # Check placement validity using GridLogic - raise error if invalid
     if not GridLogic.can_place(game_state.grid_data, shape, r, c):
         # This case should ideally be prevented by GameState.step checking valid_actions first.
-        # Log an error if reached.
         logger.error(
             f"Invalid placement attempted in execute_placement: Shape {shape_idx} at ({r},{c}). "
-            "This should have been caught earlier by checking valid_actions."
+            "This should have been caught earlier."
         )
-        # Return zero reward and counts for invalid placement attempt.
-        return 0.0, 0, 0
+        raise ValueError("Invalid placement location.")
 
     # --- Place the shape ---
-    placed_coords: set[Coord] = set()  # Use Coord type alias
+    placed_coords: set[Coord] = set()
     placed_count = 0
     color_id = COLOR_TO_ID_MAP.get(shape.color, NO_COLOR_ID)
     if color_id == NO_COLOR_ID:
+        # Use default color ID 0 if the test color isn't found
         logger.warning(
             f"Shape color {shape.color} not found in COLOR_TO_ID_MAP! Using ID 0."
         )
-        color_id = 0  # Assign a default ID
+        color_id = 0
 
     for dr, dc, _ in shape.triangles:
         tri_r, tri_c = r + dr, c + dc
-        # Assume valid coordinates as can_place passed
-        if game_state.grid_data.valid(tri_r, tri_c):  # Double check bounds just in case
-            if (
-                not game_state.grid_data._death_np[tri_r, tri_c]
-                and not game_state.grid_data._occupied_np[tri_r, tri_c]
-            ):
-                game_state.grid_data._occupied_np[tri_r, tri_c] = True
-                game_state.grid_data._color_id_np[tri_r, tri_c] = color_id
-                placed_coords.add((tri_r, tri_c))
-                placed_count += 1
-            else:
-                # This case should not happen if can_place was checked correctly
-                logger.error(
-                    f"Placement conflict at ({tri_r},{tri_c}) during execution despite passing can_place."
-                )
-        else:
-            # This case should not happen if can_place was checked correctly
-            logger.error(
-                f"Invalid coordinates ({tri_r},{tri_c}) during placement execution despite passing can_place."
-            )
+        # Assume valid coordinates as can_place passed and raised error otherwise
+        game_state.grid_data._occupied_np[tri_r, tri_c] = True
+        game_state.grid_data._color_id_np[tri_r, tri_c] = color_id
+        placed_coords.add((tri_r, tri_c))
+        placed_count += 1
 
     game_state.shapes[shape_idx] = None  # Remove shape from slot
-    # Update internal step stats (if they exist)
-    if hasattr(game_state, "pieces_placed_this_step"):
-        game_state.pieces_placed_this_step = placed_count
 
     # --- Check and clear lines ---
     lines_cleared_count, unique_coords_cleared, _ = GridLogic.check_and_clear_lines(
         game_state.grid_data, placed_coords
     )
     cleared_count = len(unique_coords_cleared)
-    # Update internal step stats (if they exist)
-    if hasattr(game_state, "triangles_cleared_this_step"):
-        game_state.triangles_cleared_this_step = cleared_count
 
-    # --- Update Score (Using internal attribute) ---
-    # Simple scoring: +1 per piece placed, +2 per triangle cleared
-    # Reward calculation below is separate and configurable
-    game_state._game_score += placed_count + cleared_count * 2  # Assign to _game_score
+    # --- Update Score ---
+    game_state._game_score += placed_count + cleared_count * 2
 
-    # --- Refill shapes if all slots are empty ---
-    if all(s is None for s in game_state.shapes):
-        logger.debug("All shape slots empty, triggering batch refill.")
-        ShapeLogic.refill_shape_slots(game_state, rng)
-        # Note: Refilling might immediately make the game non-over if it was previously
-        # Game over check needs to happen *after* potential refill
+    # --- REMOVED REFILL LOGIC ---
+    # --- REMOVED REWARD CALCULATION ---
 
-    # --- Determine if game is over AFTER placement and refill ---
-    # We don't set game_state._game_over here directly.
-    # GameState.step will call valid_actions() after this function returns
-    # to determine the final game over status for the step.
-    # Force recalculation to see if game *would* end without further steps
-    is_game_over_after_step = not game_state.valid_actions(force_recalculate=True)
-
-    # --- Calculate Reward based on the outcome of this step ---
-    step_reward = calculate_reward(
-        placed_count=placed_count,
-        cleared_count=cleared_count,  # Pass the count
-        is_game_over=is_game_over_after_step,  # Pass the potential end state
-        config=game_state.env_config,
-    )
-
-    # Return reward and stats for this step
-    return step_reward, cleared_count, placed_count
+    # Return stats needed by GameState.step for reward calculation
+    return cleared_count, placed_count

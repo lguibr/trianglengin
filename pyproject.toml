@@ -1,0 +1,95 @@
+# File: trianglengin/pyproject.toml
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "trianglengin"
+version = "0.1.0" # Initial version
+authors = [{ name="Luis Guilherme P. M.", email="lgpelin92@gmail.com" }]
+description = "Core engine (game logic, features, data) for AlphaTriangle/MuzeroTriangle."
+readme = "README.md"
+license = { file="LICENSE" }
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Games/Entertainment :: Puzzle Games",
+    "Development Status :: 3 - Alpha",
+]
+dependencies = [
+    "numpy>=1.20.0",
+    "pydantic>=2.0.0",
+    "typing_extensions>=4.0.0",
+    # Add other core dependencies as needed (e.g., numba if grid_features moves here later)
+    # Keep Ray out for now unless StatsCollector moves here
+]
+
+[project.urls]
+"Homepage" = "https://github.com/lguibr/alphatriangle" # Link to the main project for now
+"Bug Tracker" = "https://github.com/lguibr/alphatriangle/issues"
+
+# --- ADDED: Optional Dependencies for Development ---
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=3.0.0",
+    "pytest-mock>=3.0.0", # Add if mocking is needed in tests
+    "ruff",
+    "mypy",
+    "build",
+    "twine",
+    "codecov", # If using codecov
+    # Add Ray here if testing StatsCollectorActor locally
+    # "ray>=2.8.0",
+]
+# --- END ADDED ---
+
+[tool.setuptools.packages.find]
+where = ["."] # Search for packages in the root directory
+
+[tool.setuptools.package-data]
+"*" = ["*.txt", "*.md", "*.json"] # Include non-code files
+
+# --- Tool Configurations (Optional but Recommended) ---
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "C4", "ARG", "SIM", "TCH", "PTH", "NPY"]
+ignore = ["E501"] # Ignore line length errors if needed selectively
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true # Start with true, gradually reduce
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q --cov=trianglengin --cov-report=term-missing"
+testpaths = [
+    "tests",
+]
+
+[tool.coverage.run]
+omit = [
+    "*/__init__.py",
+    "*/README.md",
+    "trianglengin/config/*", # Config models are mostly declarative
+    "trianglengin/utils/types.py", # Simple type aliases
+    "trianglengin/core/structs/*", # Simple data structures
+    "tests/*", # Exclude tests from coverage report
+]
+
+[tool.coverage.report]
+fail_under = 50 # Start with a reasonable target for core logic
+show_missing = true

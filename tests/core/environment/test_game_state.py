@@ -432,9 +432,9 @@ def test_game_state_step_triggers_game_over(
     reward1, done1 = gs.step(action1)
     assert not done1, "Game should not be over after first placement"
     # Check that the cell is occupied *after* the step (and potential clear check)
-    assert gs.grid_data.is_occupied(
-        empty_r_down, empty_c_down
-    ), f"Cell ({empty_r_down},{empty_c_down}) should be occupied after step 1"
+    assert gs.grid_data.is_occupied(empty_r_down, empty_c_down), (
+        f"Cell ({empty_r_down},{empty_c_down}) should be occupied after step 1"
+    )
     mock_refill.assert_not_called()
     assert gs.shapes[0] is None
     assert gs.shapes[1] is not None

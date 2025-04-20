@@ -7,9 +7,6 @@ import pytest
 
 from trianglengin.config.env_config import EnvConfig
 from trianglengin.core.environment.grid.grid_data import GridData
-from trianglengin.core.environment.grid.line_cache import (
-    get_precomputed_lines_and_map,
-)
 
 logging.basicConfig(level=logging.DEBUG)
 

@@ -1,3 +1,4 @@
+# File: tests/core/environment/test_game_state.py
 import logging
 
 import numpy as np
@@ -64,7 +65,8 @@ def test_game_state_initialization(default_game_state: GameState):
     assert gs.game_score() == 0
     is_initially_over = gs.is_over()  # Check if game over
     if is_initially_over:
-        assert "No valid actions available at start" in gs.get_game_over_reason()
+        reason = gs.get_game_over_reason()
+        assert reason is not None and "No valid actions available at start" in reason
     else:
         assert gs.get_game_over_reason() is None
         assert len(gs.valid_actions()) > 0
@@ -87,7 +89,8 @@ def test_game_state_reset(default_game_state: GameState):
     assert gs.game_score() == 0
     is_over_after_reset = gs.is_over()
     if is_over_after_reset:
-        assert "No valid actions available at start" in gs.get_game_over_reason()
+        reason = gs.get_game_over_reason()
+        assert reason is not None and "No valid actions available at start" in reason
     else:
         assert gs.get_game_over_reason() is None
 
@@ -138,7 +141,7 @@ def test_game_state_step(default_game_state: GameState):
     shape_index, r, c = decode_action(action, gs.env_config)
     shape_placed = gs.shapes[shape_index]
     assert shape_placed is not None, "Action corresponds to an empty shape slot."
-    placed_triangle_count = len(shape_placed.triangles)
+    len(shape_placed.triangles)
 
     logging.debug(
         f"Before step: Action={action}, ShapeIdx={shape_index}, Pos=({r},{c})"
@@ -162,7 +165,6 @@ def test_game_state_step(default_game_state: GameState):
     # A simpler check: if the game isn't over, the grid shouldn't be completely empty
     # unless a full clear happened (which is rare).
     if not done:
-        playable_mask = ~gs.grid_data._death_np
         # It's possible to clear the entire board, so we can't assert occupied.any()
         # assert gs.grid_data._occupied_np[playable_mask].any()
         pass  # Cannot make strong assertions about grid state easily
@@ -271,7 +273,8 @@ def test_game_state_is_over(default_game_state: GameState, mocker: MockerFixture
     initial_outcome = gs.get_outcome()
     if initial_is_over:
         assert initial_outcome == -1.0
-        assert "No valid actions available at start" in gs.get_game_over_reason()
+        reason = gs.get_game_over_reason()
+        assert reason is not None and "No valid actions available at start" in reason
     else:
         assert initial_outcome == 0.0
         assert gs.get_game_over_reason() is None
@@ -284,7 +287,8 @@ def test_game_state_is_over(default_game_state: GameState, mocker: MockerFixture
     assert gs.is_over()  # Should now return True
     assert gs.get_outcome() == -1.0
     # Check if the reason was set correctly by is_over()
-    assert "No valid actions available" in gs.get_game_over_reason()
+    reason = gs.get_game_over_reason()
+    assert reason is not None and "No valid actions available" in reason
 
     # Test reset clears the mocked state
     gs.reset()  # Reset should un-mock and potentially find valid actions again
@@ -294,7 +298,8 @@ def test_game_state_is_over(default_game_state: GameState, mocker: MockerFixture
 
     if final_is_over:
         assert final_outcome == -1.0
-        assert "No valid actions available at start" in gs.get_game_over_reason()
+        reason = gs.get_game_over_reason()
+        assert reason is not None and "No valid actions available at start" in reason
         logging.info("Note: Game is over immediately after reset (no valid actions).")
     else:
         assert final_outcome == 0.0
@@ -472,6 +477,7 @@ def test_game_state_forced_game_over(default_game_state: GameState):
     assert not gs.is_over()
     gs.force_game_over("Test reason")
     assert gs.is_over()
-    assert "Test reason" in gs.get_game_over_reason()
+    reason = gs.get_game_over_reason()
+    assert reason is not None and "Test reason" in reason
     assert gs.get_outcome() == -1.0
     assert not gs.valid_actions()  # Force over should clear valid actions

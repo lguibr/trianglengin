@@ -1,6 +1,6 @@
 # File: trianglengin/core/environment/grid/line_cache.py
 import logging
-from typing import Final, Sequence, cast
+from typing import Final, cast
 
 import numpy as np
 
@@ -57,8 +57,8 @@ def _is_live(r: int, c: int, config: EnvConfig, playable_mask: np.ndarray) -> bo
     # Bounds check first
     if not (0 <= r < config.ROWS and 0 <= c < config.COLS):
         return False
-    # Check precomputed mask
-    return playable_mask[r, c]
+    # Check precomputed mask and cast to bool for mypy
+    return bool(playable_mask[r, c])
 
 
 def _get_neighbor(
@@ -163,7 +163,7 @@ def _compute_lines_and_map_v4(config: EnvConfig) -> CachedData:
 
     # --- Build Final List and Map ---
     final_lines_list = sorted(
-        list(maximal_lines_set),
+        maximal_lines_set,
         key=lambda line: (
             line[0][0],
             line[0][1],

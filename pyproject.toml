@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "trianglengin"
-version = "0.1.0" # Initial version
+version = "1.0.0" # Updated version
 authors = [{ name="Luis Guilherme P. M.", email="lgpelin92@gmail.com" }]
 description = "Core engine (game logic, features, data) for a triangle puzzle game." # Updated description
 readme = "README.md"
@@ -19,7 +19,7 @@ classifiers = [
     "Operating System :: OS Independent",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Games/Entertainment :: Puzzle Games",
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta", # Consider updating status if appropriate for 1.0.0
 ]
 dependencies = [
     "numpy>=1.20.0",

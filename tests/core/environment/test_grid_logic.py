@@ -1,9 +1,11 @@
 # File: tests/core/environment/test_grid_logic.py
-import pytest
 import logging
 
+import pytest
+
 from trianglengin.config import EnvConfig
-from trianglengin.core.environment.grid import GridData, logic as GridLogic
+from trianglengin.core.environment.grid import GridData
+from trianglengin.core.environment.grid import logic as GridLogic
 from trianglengin.core.structs import Shape
 
 # Default color for fixture shapes
@@ -75,7 +77,7 @@ def test_can_place_occupied(default_grid: GridData):
 
 def test_can_place_death_zone(default_grid: GridData):
     """Test placement fails if target is in death zone."""
-    shape = Shape([(0, 0, False)], DEFAULT_TEST_COLOR)  # Single Down
+    Shape([(0, 0, False)], DEFAULT_TEST_COLOR)  # Single Down
     death_r, death_c = -1, -1
     for r in range(default_grid.rows):
         for c in range(default_grid.cols):
@@ -151,9 +153,9 @@ def test_check_and_clear_lines_simple(default_grid: GridData):
     assert cleared_line_sets == {frozenset(target_line)}, "Cleared line set mismatch"
     for r, c in target_line_set:
         assert not default_grid._occupied_np[r, c], f"Cell ({r},{c}) was not cleared"
-        assert (
-            default_grid._color_id_np[r, c] == -1
-        ), f"Color ID for ({r},{c}) not reset"
+        assert default_grid._color_id_np[r, c] == -1, (
+            f"Color ID for ({r},{c}) not reset"
+        )
 
 
 def test_check_and_clear_lines_no_clear(default_grid: GridData):
@@ -179,9 +181,9 @@ def test_check_and_clear_lines_no_clear(default_grid: GridData):
     assert not cleared_line_sets, "Cleared line sets should be empty"
     # Verify grid cells remain occupied
     for r, c in coords_to_occupy:
-        assert default_grid._occupied_np[
-            r, c
-        ], f"Cell ({r},{c}) should still be occupied"
+        assert default_grid._occupied_np[r, c], (
+            f"Cell ({r},{c}) should still be occupied"
+        )
 
 
 # --- Specific Boundary Line Clearing Scenarios ---
@@ -255,18 +257,18 @@ def test_boundary_line_clears_only_when_full(
 
     # Verify line exists in cache first (essential prerequisite)
     first_coord = line_coords[0]
-    assert (
-        first_coord in grid_data._coord_to_lines_map
-    ), f"Coord {first_coord} not in map for line '{line_name}'"
+    assert first_coord in grid_data._coord_to_lines_map, (
+        f"Coord {first_coord} not in map for line '{line_name}'"
+    )
     found_mapping = False
     if first_coord in grid_data._coord_to_lines_map:
         for mapped_fs in grid_data._coord_to_lines_map[first_coord]:
             if mapped_fs == line_fs:
                 found_mapping = True
                 break
-    assert (
-        found_mapping
-    ), f"Line {line_fs} not mapped to {first_coord} for line '{line_name}'"
+    assert found_mapping, (
+        f"Line {line_fs} not mapped to {first_coord} for line '{line_name}'"
+    )
 
     # --- Simulate Inward Placement ---
     placed_coords = set()
@@ -292,27 +294,27 @@ def test_boundary_line_clears_only_when_full(
             should_clear_now = len(placed_coords) == n
             if should_clear_now:
                 log.debug(f"    Checking FINAL clear after placing {coord1}")
-                assert (
-                    lines_cleared_1 == 1
-                ), f"Line '{line_name}' should clear after placing final piece {coord1}, but did not."
-                assert (
-                    coords_cleared_1 == line_set
-                ), f"Cleared coords mismatch for '{line_name}' after final piece {coord1}."
-                assert cleared_sets_1 == {
-                    line_fs
-                }, f"Cleared line set mismatch for '{line_name}' after final piece {coord1}."
+                assert lines_cleared_1 == 1, (
+                    f"Line '{line_name}' should clear after placing final piece {coord1}, but did not."
+                )
+                assert coords_cleared_1 == line_set, (
+                    f"Cleared coords mismatch for '{line_name}' after final piece {coord1}."
+                )
+                assert cleared_sets_1 == {line_fs}, (
+                    f"Cleared line set mismatch for '{line_name}' after final piece {coord1}."
+                )
                 final_clear_occurred = True
             else:
                 log.debug(f"    Checking NO clear after placing {coord1}")
-                assert (
-                    lines_cleared_1 == 0
-                ), f"Line '{line_name}' cleared prematurely after placing {coord1} (step {i}, total placed: {len(placed_coords)}/{n})"
-                assert (
-                    not coords_cleared_1
-                ), f"Coords cleared prematurely for '{line_name}' after {coord1}"
-                assert grid_data._occupied_np[
-                    coord1[0], coord1[1]
-                ], f"{coord1} should still be occupied after non-clearing step"
+                assert lines_cleared_1 == 0, (
+                    f"Line '{line_name}' cleared prematurely after placing {coord1} (step {i}, total placed: {len(placed_coords)}/{n})"
+                )
+                assert not coords_cleared_1, (
+                    f"Coords cleared prematurely for '{line_name}' after {coord1}"
+                )
+                assert grid_data._occupied_np[coord1[0], coord1[1]], (
+                    f"{coord1} should still be occupied after non-clearing step"
+                )
 
         # --- Place second cell of the pair (if different from first) ---
         if coord1 != coord2 and coord2 not in placed_coords:
@@ -327,34 +329,34 @@ def test_boundary_line_clears_only_when_full(
             should_clear_now = len(placed_coords) == n
             if should_clear_now:
                 log.debug(f"    Checking FINAL clear after placing {coord2}")
-                assert (
-                    lines_cleared_2 == 1
-                ), f"Line '{line_name}' should clear after placing final piece {coord2}, but did not."
-                assert (
-                    coords_cleared_2 == line_set
-                ), f"Cleared coords mismatch for '{line_name}' after final piece {coord2}."
-                assert cleared_sets_2 == {
-                    line_fs
-                }, f"Cleared line set mismatch for '{line_name}' after final piece {coord2}."
+                assert lines_cleared_2 == 1, (
+                    f"Line '{line_name}' should clear after placing final piece {coord2}, but did not."
+                )
+                assert coords_cleared_2 == line_set, (
+                    f"Cleared coords mismatch for '{line_name}' after final piece {coord2}."
+                )
+                assert cleared_sets_2 == {line_fs}, (
+                    f"Cleared line set mismatch for '{line_name}' after final piece {coord2}."
+                )
                 final_clear_occurred = True
             else:
                 log.debug(f"    Checking NO clear after placing {coord2}")
-                assert (
-                    lines_cleared_2 == 0
-                ), f"Line '{line_name}' cleared prematurely after placing {coord2} (step {i}, total placed: {len(placed_coords)}/{n})"
-                assert (
-                    not coords_cleared_2
-                ), f"Coords cleared prematurely for '{line_name}' after {coord2}"
-                assert grid_data._occupied_np[
-                    coord2[0], coord2[1]
-                ], f"{coord2} should still be occupied after non-clearing step"
+                assert lines_cleared_2 == 0, (
+                    f"Line '{line_name}' cleared prematurely after placing {coord2} (step {i}, total placed: {len(placed_coords)}/{n})"
+                )
+                assert not coords_cleared_2, (
+                    f"Coords cleared prematurely for '{line_name}' after {coord2}"
+                )
+                assert grid_data._occupied_np[coord2[0], coord2[1]], (
+                    f"{coord2} should still be occupied after non-clearing step"
+                )
 
     # --- Final Verification ---
-    assert (
-        final_clear_occurred
-    ), f"The final clear event did not happen for line '{line_name}' after placing all {n} pieces."
+    assert final_clear_occurred, (
+        f"The final clear event did not happen for line '{line_name}' after placing all {n} pieces."
+    )
     # Check that all cells in the line are indeed clear *after* the loop finishes
     for r_clr, c_clr in line_set:
-        assert not grid_data._occupied_np[
-            r_clr, c_clr
-        ], f"Cell ({r_clr},{c_clr}) was not cleared for line '{line_name}' after test completion"
+        assert not grid_data._occupied_np[r_clr, c_clr], (
+            f"Cell ({r_clr},{c_clr}) was not cleared for line '{line_name}' after test completion"
+        )

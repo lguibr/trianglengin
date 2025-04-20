@@ -1,8 +1,3 @@
-# File: trianglengin/trianglengin/utils/geometry.py
-# Winding Number Algorithm implementation
-# Source: Adapted from http://geomalgorithms.com/a03-_inclusion.html (Point in Polygon W. Randolph Franklin)
-
-
 def is_point_in_polygon(
     point: tuple[float, float], polygon: list[tuple[float, float]]
 ) -> bool:
@@ -35,24 +30,20 @@ def is_point_in_polygon(
             return True
 
         # Check if point is on the horizontal edge P1P2
-        # --- COMBINED IF ---
         if (
             abs(p1[1] - p2[1]) < epsilon
             and abs(p1[1] - y) < epsilon
             and min(p1[0], p2[0]) - epsilon <= x <= max(p1[0], p2[0]) + epsilon
         ):
             return True
-        # --- END COMBINED IF ---
 
         # Check if point is on the vertical edge P1P2
-        # --- COMBINED IF ---
         if (
             abs(p1[0] - p2[0]) < epsilon
             and abs(p1[0] - x) < epsilon
             and min(p1[1], p2[1]) - epsilon <= y <= max(p1[1], p2[1]) + epsilon
         ):
             return True
-        # --- END COMBINED IF ---
 
         # Check for intersection using winding number logic
         # Check y range (inclusive min, exclusive max for upward crossing)
@@ -71,14 +62,12 @@ def is_point_in_polygon(
                 y_in_downward_range and orientation < -epsilon
             ):  # Downward crossing, P right of edge
                 wn -= 1
-            # --- COMBINED IF for collinear points on edge ---
             elif (
                 abs(orientation) < epsilon
                 and min(p1[0], p2[0]) - epsilon <= x <= max(p1[0], p2[0]) + epsilon
                 and min(p1[1], p2[1]) - epsilon <= y <= max(p1[1], p2[1]) + epsilon
             ):
                 return True  # Point is on the edge segment
-            # --- END COMBINED IF ---
 
     # wn == 0 only when P is outside
     return wn != 0

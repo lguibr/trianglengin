@@ -45,7 +45,6 @@ def game_state_with_fixed_shapes() -> GameState:
         COLS=3,
         PLAYABLE_RANGE_PER_ROW=[(0, 3), (0, 3), (0, 3)],  # Full 3x3 is playable
         NUM_SHAPE_SLOTS=3,
-        # REMOVED: MIN_LINE_LENGTH=3,
     )
     gs = GameState(config=config_3x3, initial_seed=456)
 

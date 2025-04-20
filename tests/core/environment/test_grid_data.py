@@ -77,13 +77,17 @@ def test_grid_data_is_death(default_grid: GridData, default_config: EnvConfig):
             if 0 <= r < default_config.ROWS and 0 <= c < default_config.COLS:
                 assert default_grid.is_death(r, c) == expected_death
             else:
-                 with pytest.raises(IndexError):
-                     default_grid.is_death(r, c)
+                with pytest.raises(IndexError):
+                    default_grid.is_death(r, c)
 
-    with pytest.raises(IndexError): default_grid.is_death(-1, 0)
-    with pytest.raises(IndexError): default_grid.is_death(default_config.ROWS, 0)
-    with pytest.raises(IndexError): default_grid.is_death(0, -1)
-    with pytest.raises(IndexError): default_grid.is_death(0, default_config.COLS)
+    with pytest.raises(IndexError):
+        default_grid.is_death(-1, 0)
+    with pytest.raises(IndexError):
+        default_grid.is_death(default_config.ROWS, 0)
+    with pytest.raises(IndexError):
+        default_grid.is_death(0, -1)
+    with pytest.raises(IndexError):
+        default_grid.is_death(0, default_config.COLS)
 
 
 def test_grid_data_is_occupied(default_grid: GridData, default_config: EnvConfig):
@@ -91,8 +95,11 @@ def test_grid_data_is_occupied(default_grid: GridData, default_config: EnvConfig
     live_r, live_c = -1, -1
     for r in range(default_config.ROWS):
         start_c, end_c = default_config.PLAYABLE_RANGE_PER_ROW[r]
-        if start_c < end_c: live_r, live_c = r, start_c; break
-    if live_r == -1: pytest.skip("Test requires at least one live cell.")
+        if start_c < end_c:
+            live_r, live_c = r, start_c
+            break
+    if live_r == -1:
+        pytest.skip("Test requires at least one live cell.")
 
     assert not default_grid.is_occupied(live_r, live_c)
     default_grid._occupied_np[live_r, live_c] = True
@@ -101,25 +108,36 @@ def test_grid_data_is_occupied(default_grid: GridData, default_config: EnvConfig
 
     live_r2, live_c2 = -1, -1
     for r in range(default_config.ROWS):
-         start_c, end_c = default_config.PLAYABLE_RANGE_PER_ROW[r]
-         for c in range(start_c, end_c):
-             if (r, c) != (live_r, live_c): live_r2, live_c2 = r, c; break
-         if live_r2 != -1: break
-    if live_r2 != -1: assert not default_grid.is_occupied(live_r2, live_c2)
+        start_c, end_c = default_config.PLAYABLE_RANGE_PER_ROW[r]
+        for c in range(start_c, end_c):
+            if (r, c) != (live_r, live_c):
+                live_r2, live_c2 = r, c
+                break
+        if live_r2 != -1:
+            break
+    if live_r2 != -1:
+        assert not default_grid.is_occupied(live_r2, live_c2)
 
     death_r, death_c = -1, -1
     for r in range(default_grid.rows):
         start_c, end_c = default_config.PLAYABLE_RANGE_PER_ROW[r]
-        if start_c > 0: death_r, death_c = r, start_c - 1; break
-        if end_c < default_grid.cols: death_r, death_c = r, end_c; break
-    if death_r == -1: pytest.skip("Could not find a death zone cell.")
+        if start_c > 0:
+            death_r, death_c = r, start_c - 1
+            break
+        if end_c < default_grid.cols:
+            death_r, death_c = r, end_c
+            break
+    if death_r == -1:
+        pytest.skip("Could not find a death zone cell.")
 
     default_grid._occupied_np[death_r, death_c] = True
     assert default_grid.is_death(death_r, death_c)
     assert not default_grid.is_occupied(death_r, death_c)
 
-    with pytest.raises(IndexError): default_grid.is_occupied(-1, 0)
-    with pytest.raises(IndexError): default_grid.is_occupied(default_config.ROWS, 0)
+    with pytest.raises(IndexError):
+        default_grid.is_occupied(-1, 0)
+    with pytest.raises(IndexError):
+        default_grid.is_occupied(default_config.ROWS, 0)
 
 
 def test_grid_data_deepcopy(default_grid: GridData):
@@ -130,8 +148,11 @@ def test_grid_data_deepcopy(default_grid: GridData):
     mod_r, mod_c = -1, -1
     for r in range(grid1.rows):
         start_c, end_c = grid1.config.PLAYABLE_RANGE_PER_ROW[r]
-        if start_c < end_c: mod_r, mod_c = r, start_c; break
-    if mod_r == -1: pytest.skip("Cannot run deepcopy test without playable cells.")
+        if start_c < end_c:
+            mod_r, mod_c = r, start_c
+            break
+    if mod_r == -1:
+        pytest.skip("Cannot run deepcopy test without playable cells.")
 
     grid1._occupied_np[mod_r, mod_c] = True
     grid1._color_id_np[mod_r, mod_c] = 5
@@ -146,7 +167,9 @@ def test_grid_data_deepcopy(default_grid: GridData):
     assert grid1._death_np is not grid2._death_np
     assert hasattr(grid1, "_lines") and hasattr(grid2, "_lines")
     assert grid1._lines is not grid2._lines
-    assert hasattr(grid1, "_coord_to_lines_map") and hasattr(grid2, "_coord_to_lines_map")
+    assert hasattr(grid1, "_coord_to_lines_map") and hasattr(
+        grid2, "_coord_to_lines_map"
+    )
     assert grid1._coord_to_lines_map is not grid2._coord_to_lines_map
     assert np.array_equal(grid1._occupied_np, grid2._occupied_np)
     assert np.array_equal(grid1._color_id_np, grid2._color_id_np)
@@ -156,10 +179,13 @@ def test_grid_data_deepcopy(default_grid: GridData):
 
     mod_r2, mod_c2 = -1, -1
     for r in range(grid2.rows):
-         start_c, end_c = grid2.config.PLAYABLE_RANGE_PER_ROW[r]
-         for c in range(start_c, end_c):
-             if (r, c) != (mod_r, mod_c): mod_r2, mod_c2 = r, c; break
-         if mod_r2 != -1: break
+        start_c, end_c = grid2.config.PLAYABLE_RANGE_PER_ROW[r]
+        for c in range(start_c, end_c):
+            if (r, c) != (mod_r, mod_c):
+                mod_r2, mod_c2 = r, c
+                break
+        if mod_r2 != -1:
+            break
 
     if mod_r2 != -1:
         grid2._occupied_np[mod_r2, mod_c2] = True
@@ -178,56 +204,5 @@ def test_grid_data_deepcopy(default_grid: GridData):
     dummy_coord = (99, 99)
     dummy_line_fs = frozenset([dummy_coord])
     if grid2._coord_to_lines_map:
-         grid2._coord_to_lines_map[dummy_coord] = {dummy_line_fs}
-         assert dummy_coord not in grid1._coord_to_lines_map
-
-
-def test_compute_maximal_lines_3x3():
-    """Test maximal line computation with a 3x3 config."""
-    config_3x3 = EnvConfig(
-        ROWS=3, COLS=3, PLAYABLE_RANGE_PER_ROW=[(0, 3), (0, 3), (0, 3)]
-    )
-    # This is the precise set of 9 lines generated by the code for 3x3
-    expected_lines = {
-        frozenset(((0, 0), (0, 1), (0, 2))),
-        frozenset(((1, 0), (1, 1), (1, 2))),
-        frozenset(((2, 0), (2, 1), (2, 2))),
-        frozenset(((0, 1), (1, 1), (2, 1))), # Corrected Diagonal TL-BR
-        frozenset(((0, 2), (1, 2), (2, 2))), # Corrected Diagonal TL-BR
-        frozenset(((1, 0), (2, 0))),         # Corrected Diagonal TL-BR
-        frozenset(((1, 0), (0, 1))),         # Corrected Diagonal BL-TR
-        frozenset(((2, 0), (1, 1), (0, 2))), # Corrected Diagonal BL-TR
-        frozenset(((2, 1), (1, 2))),         # Corrected Diagonal BL-TR
-    }
-    expected_count = 9 # Should generate 9 unique maximal lines
-
-    lines, coord_map = get_precomputed_lines_and_map(config_3x3)
-    line_frozensets = {frozenset(line) for line in lines}
-
-    print("\nGenerated Maximal Lines (3x3):")
-    sorted_lines_str = sorted([str(fs) for fs in line_frozensets])
-    for line_str in sorted_lines_str:
-        print(line_str)
-    print(f"Total Generated: {len(line_frozensets)}")
-    print(f"Expected Count: {expected_count}")
-
-    # Assert generated lines match the expected set
-    missing_lines = expected_lines - line_frozensets
-    extra_lines = line_frozensets - expected_lines
-    assert not missing_lines, f"Missing expected lines: {missing_lines}"
-    assert not extra_lines, f"Found unexpected extra lines: {extra_lines}"
-    assert len(line_frozensets) == expected_count, f"Expected {expected_count} lines, got {len(line_frozensets)}"
-
-    # Check coord map sanity for center coord (1, 1)
-    assert isinstance(coord_map, dict)
-    assert len(coord_map) == 9
-    center_coord = (1, 1)
-    assert center_coord in coord_map
-    assert isinstance(coord_map[center_coord], set)
-    # Expected lines containing (1, 1) based on the corrected expected_lines
-    expected_lines_at_center = {
-         frozenset(((1, 0), (1, 1), (1, 2))), # H
-         frozenset(((0, 1), (1, 1), (2, 1))), # TL-BR
-         frozenset(((2, 0), (1, 1), (0, 2))), # BL-TR
-    }
-    assert coord_map[center_coord] == expected_lines_at_center
+        grid2._coord_to_lines_map[dummy_coord] = {dummy_line_fs}
+        assert dummy_coord not in grid1._coord_to_lines_map

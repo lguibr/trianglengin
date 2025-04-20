@@ -1,6 +1,3 @@
-# File: trianglengin/trianglengin/core/structs/triangle.py
-# Moved from alphatriangle/structs/triangle.py
-# No code changes needed, only file location.
 from __future__ import annotations
 
 

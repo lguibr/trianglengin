@@ -1,3 +1,4 @@
+# File: trianglengin/visualization/README.md
 
 # Visualization Module (`trianglengin.visualization`)
 
@@ -14,7 +15,7 @@ This module is responsible for rendering the game state visually using the Pygam
 -   **Drawing Components ([`drawing/README.md`](drawing/README.md)):**
     -   Contains specific functions for drawing different elements onto Pygame surfaces (grid, shapes, previews, HUD, highlights).
 
-**Note:** More advanced visualization components related to training (e.g., `DashboardRenderer`, `Plotter`, `ProgressBar`) remain in the `alphatriangle` project.
+**Note:** More advanced visualization components related to training (e.g., dashboards, plots, progress bars) would typically reside in a separate project that uses this engine.
 
 ## Exposed Interfaces
 
@@ -27,14 +28,14 @@ This module is responsible for rendering the game state visually using the Pygam
     -   `get_preview_index_from_screen`: Maps screen to preview index.
 -   **Drawing Functions:** (Exposed via `trianglengin.visualization.drawing`)
 -   **Config:**
-    -   `VisConfig`: Configuration class (re-exported from `alphatriangle.config`).
+    -   `DisplayConfig`: Configuration class (re-exported from `trianglengin.config`).
     -   `EnvConfig`: Configuration class (re-exported from `trianglengin.config`).
 
 ## Dependencies
 
 -   **`trianglengin.core`**: `GameState`, `EnvConfig`, `GridData`, `Shape`, `Triangle`.
+-   **`trianglengin.config`**: `DisplayConfig`.
 -   **`trianglengin.utils`**: `geometry` (Planned).
--   **`alphatriangle.config`**: `VisConfig` (Imported temporarily).
 -   **`pygame`**: The core library used for all drawing, surface manipulation, and font rendering.
 -   **Standard Libraries:** `typing`, `logging`, `math`.
 

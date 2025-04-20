@@ -26,7 +26,6 @@ class EnvConfig(BaseModel):
         ]
     )
     NUM_SHAPE_SLOTS: int = Field(default=3, gt=0)
-    # REMOVED: MIN_LINE_LENGTH
 
     # --- Reward System Constants (v3) ---
     REWARD_PER_PLACED_TRIANGLE: float = Field(default=0.01)

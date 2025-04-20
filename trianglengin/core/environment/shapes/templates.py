@@ -1,6 +1,4 @@
-# File: trianglengin/trianglengin/core/environment/shapes/templates.py
-# Moved from alphatriangle/environment/shapes/templates.py
-# No code changes needed, only file location.
+# File: trianglengin/core/environment/shapes/templates.py
 # ==============================================================================
 # ==                    PREDEFINED SHAPE TEMPLATES                          ==
 # ==                                                                        ==

@@ -1,6 +1,3 @@
-# File: trianglengin/trianglengin/core/environment/shapes/__init__.py
-# Moved from alphatriangle/environment/shapes/__init__.py
-# Updated imports
 """
 Shapes submodule handling shape generation and management.
 """

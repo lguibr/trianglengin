@@ -1,7 +1,8 @@
+# File: trianglengin/__init__.py
 """
 Triangle Engine Library (`trianglengin`)
 
-Core components for AlphaTriangle/MuzeroTriangle projects.
+Core components for a triangle puzzle game environment.
 """
 
 # Expose key components from submodules

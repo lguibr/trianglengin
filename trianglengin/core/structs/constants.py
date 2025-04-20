@@ -1,10 +1,3 @@
-# File: trianglengin/trianglengin/core/structs/constants.py
-# Moved from alphatriangle/structs/constants.py
-# No code changes needed, only file location.
-
-# Define standard colors used for shapes
-# Ensure these colors are distinct and visually clear
-# Also ensure BLACK (0,0,0) is NOT used here if it represents empty in color_np
 SHAPE_COLORS: list[tuple[int, int, int]] = [
     (220, 40, 40),  # 0: Red
     (60, 60, 220),  # 1: Blue
@@ -33,11 +26,3 @@ COLOR_ID_MAP: list[tuple[int, int, int]] = SHAPE_COLORS
 COLOR_TO_ID_MAP: dict[tuple[int, int, int], int] = {
     color: i for i, color in enumerate(COLOR_ID_MAP)
 }
-
-# Add special colors to the map if needed for rendering debug/other states
-# These IDs won't be stored during normal shape placement.
-# Example: If you want to render the debug color:
-# DEBUG_RGB_COLOR = (255, 255, 0) # Example Yellow
-# COLOR_ID_MAP.append(DEBUG_RGB_COLOR) # Append if needed elsewhere, but generally lookup handled separately.
-
-# --- End NumPy GridData Color Representation ---

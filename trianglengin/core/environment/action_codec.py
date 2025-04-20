@@ -1,14 +1,8 @@
-# File: trianglengin/trianglengin/core/environment/action_codec.py
-# Moved from alphatriangle/environment/core/action_codec.py
-# Updated imports
-# --- ADDED: Placeholder for ActionType ---
-# This will be replaced when utils/types.py is properly moved
 from typing import TypeAlias
 
 from ...config import EnvConfig
 
 ActionType: TypeAlias = int
-# --- END ADDED ---
 
 
 def encode_action(shape_idx: int, r: int, c: int, config: EnvConfig) -> ActionType:
@@ -28,7 +22,6 @@ def encode_action(shape_idx: int, r: int, c: int, config: EnvConfig) -> ActionTy
 
 def decode_action(action_index: ActionType, config: EnvConfig) -> tuple[int, int, int]:
     """Decodes an integer action into (shape_idx, r, c)."""
-    # Cast ACTION_DIM to int for comparison
     action_dim_int = int(config.ACTION_DIM)  # type: ignore[call-overload]
     if not (0 <= action_index < action_dim_int):
         raise ValueError(

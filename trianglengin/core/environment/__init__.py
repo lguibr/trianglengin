@@ -1,9 +1,6 @@
-# File: trianglengin/trianglengin/core/environment/__init__.py
-# Moved from alphatriangle/environment/__init__.py
-# Updated imports to be relative within the library
+# File: trianglengin/core/environment/__init__.py
 """
 Environment module defining the game rules, state, actions, and logic.
-This module is now independent of feature extraction for the NN.
 """
 
 from ...config import EnvConfig
@@ -32,4 +29,3 @@ __all__ = [
     # Config
     "EnvConfig",
 ]
-# REMOVED TRAILING MARKDOWN FENCE

@@ -1,122 +1,30 @@
 # File: tests/core/environment/test_grid_logic.py
 import pytest
+import logging
 
-# Import directly from the library being tested
-from trianglengin.core.environment.grid import GridData
-from trianglengin.core.environment.grid import logic as GridLogic
+from trianglengin.config import EnvConfig
+from trianglengin.core.environment.grid import GridData, logic as GridLogic
 from trianglengin.core.structs import Shape
 
-# Use fixtures from the local conftest.py
-# Fixtures are implicitly injected by pytest
+# Default color for fixture shapes
+DEFAULT_TEST_COLOR = (100, 100, 100)
+log = logging.getLogger(__name__)
 
 
-# --- Test can_place with NumPy GridData ---
-def test_can_place_empty_grid(grid_data: GridData, simple_shape: Shape):
-    """Test placement on an empty grid."""
-    start_r, start_c = -1, -1
-    for r in range(grid_data.rows):
-        s, e = grid_data.config.PLAYABLE_RANGE_PER_ROW[r]
-        for c_try in range(s, e):  # Iterate only through playable columns
-            if GridLogic.can_place(grid_data, simple_shape, r, c_try):
-                start_r, start_c = r, c_try
-                break
-        if start_r != -1:
-            break  # Found a spot
-    if start_r == -1:
-        pytest.skip("Could not find valid placement for simple_shape in empty grid.")
-
-    assert GridLogic.can_place(grid_data, simple_shape, start_r, start_c)
+@pytest.fixture
+def default_config() -> EnvConfig:
+    """Fixture for default environment configuration."""
+    return EnvConfig()
 
 
-def test_can_place_occupied(grid_data: GridData, simple_shape: Shape):
-    """Test placement fails if any target cell is occupied."""
-    start_r, start_c = -1, -1
-    for r in range(grid_data.rows):
-        s, e = grid_data.config.PLAYABLE_RANGE_PER_ROW[r]
-        for c_try in range(s, e):
-            if GridLogic.can_place(grid_data, simple_shape, r, c_try):
-                start_r, start_c = r, c_try
-                break
-        if start_r != -1:
-            break
-    if start_r == -1:
-        pytest.skip("Could not find valid placement for simple_shape.")
-
-    # Occupy one of the cells the shape would cover
-    shape_target_coords = set()
-    for dr, dc, _ in simple_shape.triangles:
-        shape_target_coords.add((start_r + dr, start_c + dc))
-
-    # Find a valid coord within the shape to occupy
-    coord_to_occupy = None
-    for r_occ, c_occ in shape_target_coords:
-        if grid_data.valid(r_occ, c_occ) and not grid_data.is_death(r_occ, c_occ):
-            coord_to_occupy = (r_occ, c_occ)
-            break
-
-    if coord_to_occupy:
-        grid_data._occupied_np[coord_to_occupy[0], coord_to_occupy[1]] = True
-        assert not GridLogic.can_place(grid_data, simple_shape, start_r, start_c)
-    else:
-        pytest.skip("Target cell for occupation is invalid or death zone.")
-
-
-def test_can_place_death_zone(grid_data: GridData):
-    """Test placement fails if any target cell is in a death zone."""
-    death_r, death_c = -1, -1
-    for r in range(grid_data.rows):
-        start_col, end_col = grid_data.config.PLAYABLE_RANGE_PER_ROW[r]
-        if start_col > 0:
-            death_r, death_c = r, start_col - 1
-            break
-        if end_col < grid_data.cols:
-            death_r, death_c = r, end_col
-            break
-    if death_r == -1:
-        pytest.skip("Could not find a death zone cell.")
-
-    assert grid_data.is_death(death_r, death_c)
-    is_up_needed = (death_r + death_c) % 2 != 0
-    single_tri_shape = Shape([(0, 0, is_up_needed)], (255, 0, 0))
-    assert not GridLogic.can_place(grid_data, single_tri_shape, death_r, death_c)
-
-
-def test_can_place_orientation_mismatch(grid_data: GridData):
-    """Test placement fails if triangle orientations don't match."""
-    up_r, up_c = -1, -1
-    for r in range(grid_data.rows):
-        s, e = grid_data.config.PLAYABLE_RANGE_PER_ROW[r]
-        for c in range(s, e):
-            if (r + c) % 2 != 0:
-                up_r, up_c = r, c
-                break
-        if up_r != -1:
-            break
-    if up_r == -1:
-        pytest.skip("Could not find playable UP cell.")
-
-    down_r, down_c = -1, -1
-    for r in range(grid_data.rows):
-        s, e = grid_data.config.PLAYABLE_RANGE_PER_ROW[r]
-        for c in range(s, e):
-            if (r + c) % 2 == 0:
-                down_r, down_c = r, c
-                break
-        if down_r != -1:
-            break
-    if down_r == -1:
-        pytest.skip("Could not find playable DOWN cell.")
-
-    shape_up = Shape([(0, 0, True)], (0, 255, 0))
-    shape_down = Shape([(0, 0, False)], (255, 0, 0))
-
-    assert not GridLogic.can_place(grid_data, shape_up, down_r, down_c)
-    assert not GridLogic.can_place(grid_data, shape_down, up_r, up_c)
-    assert GridLogic.can_place(grid_data, shape_down, down_r, down_c)
-    assert GridLogic.can_place(grid_data, shape_up, up_r, up_c)
-
-
-# --- Test check_and_clear_lines with NumPy GridData ---
+@pytest.fixture
+def default_grid(default_config: EnvConfig) -> GridData:
+    """Fixture for a default GridData instance."""
+    # Ensure the cache is populated for the default config before tests run
+    # This will now use the fixed _compute_lines_and_map_v4
+    GridData(default_config)
+    # Return a fresh instance for the test, which will reuse the cache
+    return GridData(default_config)
 
 
 def occupy_coords(grid_data: GridData, coords: set[tuple[int, int]]):
@@ -124,95 +32,329 @@ def occupy_coords(grid_data: GridData, coords: set[tuple[int, int]]):
     for r, c in coords:
         if grid_data.valid(r, c) and not grid_data.is_death(r, c):
             grid_data._occupied_np[r, c] = True
+            # Assign a dummy color ID
+            grid_data._color_id_np[r, c] = 0
 
 
-def test_check_and_clear_lines_no_clear(grid_data: GridData):
-    """Test when newly occupied cells don't complete any lines."""
-    coords_to_occupy = set()
-    count = 0
-    for r in range(grid_data.rows):
-        s, e = grid_data.config.PLAYABLE_RANGE_PER_ROW[r]
-        for c in range(s, e, 3):  # Place sparsely
-            coords_to_occupy.add((r, c))
-            count += 1
-            if count >= 3:
+# --- Basic Placement Tests ---
+# (Keep existing basic placement tests - they should still pass)
+
+
+def test_can_place_basic(default_grid: GridData):
+    """Test basic placement in empty grid."""
+    shape = Shape([(0, 0, False), (0, 1, True)], DEFAULT_TEST_COLOR)  # D, U
+    start_r, start_c = -1, -1
+    for r in range(default_grid.rows):
+        for c in range(default_grid.cols):
+            if not default_grid.is_death(r, c) and (r + c) % 2 == 0:  # Find Down cell
+                start_r, start_c = r, c
                 break
-        if count >= 3:
+        if start_r != -1:
             break
-    if count < 3:
-        pytest.skip("Could not find 3 suitable cells.")
-
-    occupy_coords(grid_data, coords_to_occupy)
-    lines_cleared, unique_cleared, cleared_lines_set = GridLogic.check_and_clear_lines(
-        grid_data, coords_to_occupy
-    )
-    assert lines_cleared == 0
-    assert not unique_cleared
-    assert not cleared_lines_set
-    for r_occ, c_occ in coords_to_occupy:
-        assert grid_data._occupied_np[r_occ, c_occ]
+    if start_r == -1:
+        pytest.skip("Could not find a valid starting Down cell.")
+    assert GridLogic.can_place(default_grid, shape, start_r, start_c)
 
 
-def test_check_and_clear_lines_single_line(grid_data: GridData):
-    """Test clearing a single maximal line."""
-    # Find any precomputed maximal line
-    if not grid_data._lines:
-        pytest.skip("No precomputed lines found for this configuration.")
-
-    # Select the first maximal line found
-    target_line_coords_tuple = grid_data._lines[0]
-    expected_line_coords_fs = frozenset(target_line_coords_tuple)
-
-    # Occupy all but the last coordinate in the line
-    coords_list = list(target_line_coords_tuple)
-    if not coords_list:
-        pytest.skip("Selected line is empty.")
-
-    last_coord = coords_list[-1]
-    coords_to_pre_occupy = set(coords_list[:-1])
-    occupy_coords(grid_data, coords_to_pre_occupy)
-
-    # Occupy the last coordinate
-    newly_occupied = {last_coord}
-    occupy_coords(grid_data, newly_occupied)
-
-    # Check for clears
-    lines_cleared, unique_cleared, cleared_lines_set = GridLogic.check_and_clear_lines(
-        grid_data, newly_occupied
-    )
-
-    assert lines_cleared >= 1  # Could clear more than one if lines overlap
-    assert unique_cleared.issuperset(expected_line_coords_fs)
-    assert expected_line_coords_fs in cleared_lines_set
-
-    # Verify the cleared coordinates are no longer occupied
-    for r_clr, c_clr in expected_line_coords_fs:
-        assert not grid_data._occupied_np[r_clr, c_clr]
-
-
-def test_check_and_clear_lines_no_lines_to_check(grid_data: GridData):
-    """Test the case where newly occupied coords are not part of any potential line."""
-    # Find a coordinate not in the map (e.g., a death zone coord if possible)
-    coord_not_in_map = None
-    for r in range(grid_data.rows):
-        for c in range(grid_data.cols):
-            if (r, c) not in grid_data._coord_to_lines_map:
-                coord_not_in_map = (r, c)
+def test_can_place_occupied(default_grid: GridData):
+    """Test placement fails if target is occupied."""
+    shape = Shape([(0, 0, False)], DEFAULT_TEST_COLOR)  # Single Down
+    start_r, start_c = -1, -1
+    for r in range(default_grid.rows):
+        for c in range(default_grid.cols):
+            if not default_grid.is_death(r, c) and (r + c) % 2 == 0:  # Find Down cell
+                start_r, start_c = r, c
                 break
-        if coord_not_in_map:
+        if start_r != -1:
             break
+    if start_r == -1:
+        pytest.skip("Could not find a valid starting Down cell.")
+    default_grid._occupied_np[start_r, start_c] = True
+    assert not GridLogic.can_place(default_grid, shape, start_r, start_c)
 
-    if coord_not_in_map is None:
-        pytest.skip("Could not find a coordinate not in the line map.")
 
-    newly_occupied = {coord_not_in_map}
-    # Manually occupy it for the test (even if it's death zone, logic should handle)
-    if grid_data.valid(*coord_not_in_map):
-        grid_data._occupied_np[coord_not_in_map] = True
+def test_can_place_death_zone(default_grid: GridData):
+    """Test placement fails if target is in death zone."""
+    shape = Shape([(0, 0, False)], DEFAULT_TEST_COLOR)  # Single Down
+    death_r, death_c = -1, -1
+    for r in range(default_grid.rows):
+        for c in range(default_grid.cols):
+            if default_grid.is_death(r, c):
+                death_r, death_c = r, c
+                break
+        if death_r != -1:
+            break
+    if death_r == -1:
+        pytest.skip("Could not find a death zone cell.")
+    shape_to_use = Shape([(0, 0, (death_r + death_c) % 2 != 0)], DEFAULT_TEST_COLOR)
+    assert not GridLogic.can_place(default_grid, shape_to_use, death_r, death_c)
 
-    lines_cleared, unique_cleared, cleared_lines_set = GridLogic.check_and_clear_lines(
-        grid_data, newly_occupied
+
+def test_can_place_orientation_mismatch(default_grid: GridData):
+    """Test placement fails if shape orientation doesn't match grid."""
+    shape = Shape([(0, 0, True)], DEFAULT_TEST_COLOR)  # Needs Up
+    start_r, start_c = -1, -1
+    for r in range(default_grid.rows):
+        for c in range(default_grid.cols):
+            if not default_grid.is_death(r, c) and (r + c) % 2 == 0:  # Find Down cell
+                start_r, start_c = r, c
+                break
+        if start_r != -1:
+            break
+    if start_r == -1:
+        pytest.skip("Could not find a valid starting Down cell.")
+    assert not GridLogic.can_place(default_grid, shape, start_r, start_c)
+
+    shape_down = Shape([(0, 0, False)], DEFAULT_TEST_COLOR)  # Needs Down
+    up_r, up_c = -1, -1
+    for r in range(default_grid.rows):
+        for c in range(default_grid.cols):
+            if not default_grid.is_death(r, c) and (r + c) % 2 != 0:  # Find Up cell
+                up_r, up_c = r, c
+                break
+        if up_r != -1:
+            break
+    if up_r == -1:
+        pytest.skip("Could not find a valid starting Up cell.")
+    assert not GridLogic.can_place(default_grid, shape_down, up_r, up_c)
+
+
+def test_can_place_out_of_bounds(default_grid: GridData):
+    """Test placement fails if shape goes out of bounds."""
+    shape = Shape([(0, 0, False), (0, 1, True)], DEFAULT_TEST_COLOR)
+    assert not GridLogic.can_place(default_grid, shape, 0, default_grid.cols - 1)
+    shape_tall = Shape([(0, 0, False), (1, 0, False)], DEFAULT_TEST_COLOR)
+    assert not GridLogic.can_place(default_grid, shape_tall, default_grid.rows - 1, 0)
+
+
+# --- Line Clearing Tests ---
+
+
+def test_check_and_clear_lines_simple(default_grid: GridData):
+    """Test clearing a single horizontal line."""
+    target_line = None
+    for line in default_grid._lines:
+        # Find a reasonably long horizontal line for a good test
+        if len(line) > 4 and all(c[0] == line[0][0] for c in line):
+            target_line = line
+            break
+    if not target_line:
+        pytest.skip("Could not find a suitable horizontal line.")
+    target_line_set = set(target_line)
+    occupy_coords(default_grid, target_line_set)
+    last_coord = target_line[-1]
+    lines_cleared, coords_cleared, cleared_line_sets = GridLogic.check_and_clear_lines(
+        default_grid, {last_coord}
     )
-    assert lines_cleared == 0
-    assert not unique_cleared
-    assert not cleared_lines_set
+    assert lines_cleared == 1, f"Expected 1 line clear, got {lines_cleared}"
+    assert coords_cleared == target_line_set, "Cleared coordinates mismatch"
+    assert cleared_line_sets == {frozenset(target_line)}, "Cleared line set mismatch"
+    for r, c in target_line_set:
+        assert not default_grid._occupied_np[r, c], f"Cell ({r},{c}) was not cleared"
+        assert (
+            default_grid._color_id_np[r, c] == -1
+        ), f"Color ID for ({r},{c}) not reset"
+
+
+def test_check_and_clear_lines_no_clear(default_grid: GridData):
+    """Test that no lines are cleared if none are complete."""
+    target_line = None
+    for line in default_grid._lines:
+        # Find a reasonably long line
+        if len(line) > 4:
+            target_line = line
+            break
+    if not target_line:
+        pytest.skip("Could not find a suitable line.")
+    # Occupy all but the last coordinate
+    coords_to_occupy = set(target_line[:-1])
+    occupy_coords(default_grid, coords_to_occupy)
+    # Check clear using the last occupied coordinate
+    last_occupied_coord = target_line[-2]  # The one before the empty one
+    lines_cleared, coords_cleared, cleared_line_sets = GridLogic.check_and_clear_lines(
+        default_grid, {last_occupied_coord}
+    )
+    assert lines_cleared == 0, f"Expected 0 lines cleared, got {lines_cleared}"
+    assert not coords_cleared, "Coords should not be cleared"
+    assert not cleared_line_sets, "Cleared line sets should be empty"
+    # Verify grid cells remain occupied
+    for r, c in coords_to_occupy:
+        assert default_grid._occupied_np[
+            r, c
+        ], f"Cell ({r},{c}) should still be occupied"
+
+
+# --- Specific Boundary Line Clearing Scenarios ---
+
+# Define the boundary lines explicitly based on default EnvConfig
+# IMPORTANT: Use the natural traversal order expected from line_cache v4
+BOUNDARY_LINES = {
+    "top_left_diag": (
+        (4, 0),
+        (3, 0),
+        (3, 1),
+        (2, 1),
+        (2, 2),
+        (1, 2),
+        (1, 3),
+        (0, 3),
+        (0, 4),
+    ),
+    "top_horiz": tuple((0, c) for c in range(3, 12)),
+    "top_right_diag": (
+        (0, 10),
+        (0, 11),
+        (1, 11),
+        (1, 12),
+        (2, 12),
+        (2, 13),
+        (3, 13),
+        (3, 14),
+        (4, 14),
+    ),
+    "bottom_right_diag": (
+        (3, 14),
+        (4, 14),
+        (4, 13),
+        (5, 13),
+        (5, 12),
+        (6, 12),
+        (6, 11),
+        (7, 11),
+        (7, 10),
+    ),
+    "bottom_horiz": tuple((7, c) for c in range(3, 12)),
+    "bottom_left_diag": (
+        (3, 0),
+        (4, 0),
+        (4, 1),
+        (5, 1),
+        (5, 2),
+        (6, 2),
+        (6, 3),
+        (7, 3),
+        (7, 4),
+    ),
+}
+
+
+@pytest.mark.parametrize("line_name, line_coords", BOUNDARY_LINES.items())
+def test_boundary_line_clears_only_when_full(
+    line_name: str, line_coords: tuple[tuple[int, int], ...], default_grid: GridData
+):
+    """
+    Tests that boundary lines clear only when the final middle piece(s) are placed,
+    simulating placing pieces from the outside inwards.
+    """
+    grid_data = default_grid
+    grid_data.reset()  # Start with a clean grid for each line test
+    n = len(line_coords)
+    line_set = set(line_coords)
+    line_fs = frozenset(line_coords)
+    log.info(f"Testing line '{line_name}' (len={n}): {line_coords}")
+
+    # Verify line exists in cache first (essential prerequisite)
+    first_coord = line_coords[0]
+    assert (
+        first_coord in grid_data._coord_to_lines_map
+    ), f"Coord {first_coord} not in map for line '{line_name}'"
+    found_mapping = False
+    if first_coord in grid_data._coord_to_lines_map:
+        for mapped_fs in grid_data._coord_to_lines_map[first_coord]:
+            if mapped_fs == line_fs:
+                found_mapping = True
+                break
+    assert (
+        found_mapping
+    ), f"Line {line_fs} not mapped to {first_coord} for line '{line_name}'"
+
+    # --- Simulate Inward Placement ---
+    placed_coords = set()
+    final_clear_occurred = False
+    for i in range(n // 2 + (n % 2)):  # Iterate inwards (e.g., 0, 1, 2, 3, 4 for n=9)
+        coord1 = line_coords[i]
+        coord2 = line_coords[n - 1 - i]
+        is_last_pair_or_middle = i == (n // 2 + (n % 2) - 1)
+        log.debug(
+            f"  Step {i}: Considering pair {coord1} / {coord2}. Is last: {is_last_pair_or_middle}"
+        )
+
+        # --- Place first cell of the pair ---
+        if coord1 not in placed_coords:
+            log.debug(f"    Placing {coord1}...")
+            grid_data._occupied_np[coord1[0], coord1[1]] = True
+            grid_data._color_id_np[coord1[0], coord1[1]] = 0
+            placed_coords.add(coord1)
+            lines_cleared_1, coords_cleared_1, cleared_sets_1 = (
+                GridLogic.check_and_clear_lines(grid_data, {coord1})
+            )
+
+            should_clear_now = len(placed_coords) == n
+            if should_clear_now:
+                log.debug(f"    Checking FINAL clear after placing {coord1}")
+                assert (
+                    lines_cleared_1 == 1
+                ), f"Line '{line_name}' should clear after placing final piece {coord1}, but did not."
+                assert (
+                    coords_cleared_1 == line_set
+                ), f"Cleared coords mismatch for '{line_name}' after final piece {coord1}."
+                assert cleared_sets_1 == {
+                    line_fs
+                }, f"Cleared line set mismatch for '{line_name}' after final piece {coord1}."
+                final_clear_occurred = True
+            else:
+                log.debug(f"    Checking NO clear after placing {coord1}")
+                assert (
+                    lines_cleared_1 == 0
+                ), f"Line '{line_name}' cleared prematurely after placing {coord1} (step {i}, total placed: {len(placed_coords)}/{n})"
+                assert (
+                    not coords_cleared_1
+                ), f"Coords cleared prematurely for '{line_name}' after {coord1}"
+                assert grid_data._occupied_np[
+                    coord1[0], coord1[1]
+                ], f"{coord1} should still be occupied after non-clearing step"
+
+        # --- Place second cell of the pair (if different from first) ---
+        if coord1 != coord2 and coord2 not in placed_coords:
+            log.debug(f"    Placing {coord2}...")
+            grid_data._occupied_np[coord2[0], coord2[1]] = True
+            grid_data._color_id_np[coord2[0], coord2[1]] = 0
+            placed_coords.add(coord2)
+            lines_cleared_2, coords_cleared_2, cleared_sets_2 = (
+                GridLogic.check_and_clear_lines(grid_data, {coord2})
+            )
+
+            should_clear_now = len(placed_coords) == n
+            if should_clear_now:
+                log.debug(f"    Checking FINAL clear after placing {coord2}")
+                assert (
+                    lines_cleared_2 == 1
+                ), f"Line '{line_name}' should clear after placing final piece {coord2}, but did not."
+                assert (
+                    coords_cleared_2 == line_set
+                ), f"Cleared coords mismatch for '{line_name}' after final piece {coord2}."
+                assert cleared_sets_2 == {
+                    line_fs
+                }, f"Cleared line set mismatch for '{line_name}' after final piece {coord2}."
+                final_clear_occurred = True
+            else:
+                log.debug(f"    Checking NO clear after placing {coord2}")
+                assert (
+                    lines_cleared_2 == 0
+                ), f"Line '{line_name}' cleared prematurely after placing {coord2} (step {i}, total placed: {len(placed_coords)}/{n})"
+                assert (
+                    not coords_cleared_2
+                ), f"Coords cleared prematurely for '{line_name}' after {coord2}"
+                assert grid_data._occupied_np[
+                    coord2[0], coord2[1]
+                ], f"{coord2} should still be occupied after non-clearing step"
+
+    # --- Final Verification ---
+    assert (
+        final_clear_occurred
+    ), f"The final clear event did not happen for line '{line_name}' after placing all {n} pieces."
+    # Check that all cells in the line are indeed clear *after* the loop finishes
+    for r_clr, c_clr in line_set:
+        assert not grid_data._occupied_np[
+            r_clr, c_clr
+        ], f"Cell ({r_clr},{c_clr}) was not cleared for line '{line_name}' after test completion"

@@ -1,10 +1,8 @@
-# File: trianglengin/trianglengin/cli.py
 import logging
 import sys
 from typing import Annotated
 
-# Import torch here if needed for seeding
-import torch
+# Removed torch import
 import typer
 
 # Use internal imports
@@ -65,7 +63,7 @@ def run_interactive_mode(mode: str, seed: int, log_level: str):
     logger = logging.getLogger(__name__)
     logger.info(f"Running Triangle Engine in {mode.capitalize()} mode...")
 
-    # --- UPDATED SEEDING ---
+    # --- UPDATED SEEDING (Removed Torch) ---
     try:
         import random
 
@@ -75,15 +73,13 @@ def run_interactive_mode(mode: str, seed: int, log_level: str):
         # Use default_rng() for NumPy if available, otherwise skip NumPy seeding
         try:
             np.random.default_rng(seed)
-            # You might store rng if needed elsewhere, but just creating it seeds
             logger.debug("NumPy seeded using default_rng.")
         except AttributeError:
             logger.warning("np.random.default_rng not available. Skipping NumPy seed.")
         except ImportError:
             logger.warning("NumPy not found. Skipping NumPy seed.")
 
-        torch.manual_seed(seed)
-        # Add MPS seeding if needed later when utils are moved
+        # Removed torch.manual_seed(seed)
         logger.info(f"Set random seeds to {seed}")
     except ImportError:
         logger.warning("Could not import all libraries for full seeding.")

@@ -1,124 +1,131 @@
-# trianglengin/core/environment/grid/logic.py
-"""
-Contains logic related to grid operations like placement validation and line clearing.
-
-Uses GridData for state and operates on its NumPy arrays and line information.
-
-See GridData documentation: [grid_data.py](grid_data.py)
-"""
-
+# File: trianglengin/core/environment/grid/logic.py
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
-# Import type aliases from line_cache
-from trianglengin.core.environment.grid.line_cache import Coord, LineFsSet
-
-# Import NO_COLOR_ID from the structs package directly
 from trianglengin.core.structs.constants import NO_COLOR_ID
 
 if TYPE_CHECKING:
+    from trianglengin.core.environment.grid.grid_data import GridData
     from trianglengin.core.structs.shape import Shape
 
-    from .grid_data import GridData
 
-logger = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
+
+# Minimum length a line must have to be eligible for clearing
+MIN_LINE_LENGTH_TO_CLEAR: Final = 2
 
 
 def can_place(grid_data: "GridData", shape: "Shape", r: int, c: int) -> bool:
     """
-    Checks if a shape can be placed at the specified (r, c) top-left position
-    on the grid, considering occupancy, death zones, and triangle orientation.
-    Reads state from GridData's NumPy arrays.
+    Checks if a shape can be placed at the specified (r, c) top-left position.
+
+    Args:
+        grid_data: The current grid state.
+        shape: The shape to place.
+        r: Target row for the shape's origin (relative 0,0).
+        c: Target column for the shape's origin (relative 0,0).
+
+    Returns:
+        True if the placement is valid, False otherwise.
     """
     if not shape or not shape.triangles:
+        log.warning("Attempted to check placement for an empty or invalid shape.")
         return False
 
     for dr, dc, is_up_shape in shape.triangles:
-        tri_r, tri_c = r + dr, c + dc
+        place_r, place_c = r + dr, c + dc
 
-        if not grid_data.valid(tri_r, tri_c):
-            return False
-        # Check death zone and occupancy directly from NumPy arrays
-        if grid_data._death_np[tri_r, tri_c] or grid_data._occupied_np[tri_r, tri_c]:
+        # 1. Check bounds
+        if not grid_data.valid(place_r, place_c):
             return False
 
-        is_up_grid = (tri_r + tri_c) % 2 != 0
-        if is_up_grid != is_up_shape:
-            # This debug message is helpful, keep it
-            # logger.debug(
-            #     f"Orientation mismatch at ({tri_r},{tri_c}): Grid is {'Up' if is_up_grid else 'Down'}, Shape requires {'Up' if is_up_shape else 'Down'}"
-            # )
+        # 2. Check death zone
+        if grid_data.is_death(place_r, place_c):
+            return False
+
+        # 3. Check occupancy
+        if grid_data.is_occupied(place_r, place_c):
+            return False
+
+        # 4. Check orientation match
+        is_up_grid = (place_r + place_c) % 2 != 0
+        if is_up_shape != is_up_grid:
             return False
 
     return True
 
 
 def check_and_clear_lines(
-    grid_data: "GridData",
-    newly_occupied_coords: set[Coord],
-) -> tuple[int, set[Coord], LineFsSet]:
+    grid_data: "GridData", newly_occupied_coords: set[tuple[int, int]]
+) -> tuple[int, set[tuple[int, int]], set[frozenset[tuple[int, int]]]]:
     """
-    Checks for completed *maximal* lines involving the newly occupied coordinates
-    and clears them. Operates on GridData's NumPy arrays and uses the
-    precomputed coordinate map for maximal lines.
+    Checks for completed lines involving the newly occupied coordinates and clears them.
+
+    Uses the precomputed coordinate-to-lines map for efficiency. Only checks
+    maximal lines that contain at least one of the newly occupied cells.
 
     Args:
-        grid_data: The GridData object (will be modified).
-        newly_occupied_coords: A set of (r, c) tuples that were just occupied.
+        grid_data: The grid data object (will be modified if lines are cleared).
+        newly_occupied_coords: A set of (r, c) tuples that were just filled.
 
     Returns:
-        Tuple containing:
-            - int: Number of maximal lines cleared.
-            - set[Coord]: Set of unique (r, c) coordinates cleared.
-            - LineFsSet: Set containing the frozenset representations
-                         of the actual maximal lines that were cleared.
+        A tuple containing:
+        - lines_cleared_count (int): The number of maximal lines cleared.
+        - unique_coords_cleared_set (set[tuple[int, int]]): A set of unique (r, c)
+          coordinates of all triangles that were cleared.
+        - set_of_cleared_lines_coord_sets (set[frozenset[tuple[int, int]]]): A set
+          containing the frozensets of coordinates for each cleared maximal line.
     """
-    lines_to_check: LineFsSet = set()
-    for coord in newly_occupied_coords:
-        if coord in grid_data._coord_to_lines_map:
-            lines_to_check.update(grid_data._coord_to_lines_map[coord])
+    if not newly_occupied_coords:
+        return 0, set(), set()
 
-    cleared_lines_frozensets: LineFsSet = set()
-    unique_coords_cleared: set[Coord] = set()
+    # Find all candidate maximal lines that include any of the new coordinates
+    candidate_lines_fs: set[frozenset[tuple[int, int]]] = set()
+    for r_new, c_new in newly_occupied_coords:
+        # Check if the coordinate exists in the precomputed map
+        if (r_new, c_new) in grid_data._coord_to_lines_map:
+            candidate_lines_fs.update(grid_data._coord_to_lines_map[(r_new, c_new)])
 
-    if not lines_to_check:
-        return 0, unique_coords_cleared, cleared_lines_frozensets
+    if not candidate_lines_fs:
+        return 0, set(), set()
 
-    logger.debug(
-        f"Checking {len(lines_to_check)} potential maximal lines for completion."
-    )
+    cleared_lines_fs: set[frozenset[tuple[int, int]]] = set()
+    unique_coords_cleared: set[tuple[int, int]] = set()
 
-    for line_coords_fs in lines_to_check:
-        is_complete = True
-        for r_line, c_line in line_coords_fs:
-            # Check bounds and occupancy directly
-            # Note: Precomputed lines should only contain valid, playable cells.
-            # A check here is defensive programming.
-            if not (0 <= r_line < grid_data.rows and 0 <= c_line < grid_data.cols):
-                logger.error(
-                    f"Invalid coord ({r_line},{c_line}) in line: {line_coords_fs}"
-                )
-                is_complete = False
-                break
-            if not grid_data._occupied_np[r_line, c_line]:
-                is_complete = False
-                break
+    # Check each candidate line for completion
+    for line_fs in candidate_lines_fs:
+        line_coords = tuple(line_fs)  # Convert back for iteration/indexing if needed
 
-        if is_complete:
-            logger.debug(f"Maximal Line completed: {line_coords_fs}")
-            cleared_lines_frozensets.add(line_coords_fs)
-            unique_coords_cleared.update(line_coords_fs)
+        # --- Added Check: Ensure line has minimum length ---
+        if len(line_coords) < MIN_LINE_LENGTH_TO_CLEAR:
+            continue
+        # --- End Added Check ---
 
+        # Check if ALL coordinates in this line are now occupied
+        is_line_complete = True
+        for r_line, c_line in line_coords:
+            # Use is_occupied which correctly handles death zones
+            if not grid_data.is_occupied(r_line, c_line):
+                is_line_complete = False
+                break  # No need to check further coords in this line
+
+        if is_line_complete:
+            cleared_lines_fs.add(line_fs)
+            unique_coords_cleared.update(line_coords)
+
+    # If any lines were completed, clear the cells
     if unique_coords_cleared:
-        logger.info(
-            f"Clearing {len(cleared_lines_frozensets)} maximal lines involving {len(unique_coords_cleared)} unique coordinates."
+        log.debug(
+            f"Clearing {len(cleared_lines_fs)} lines involving {len(unique_coords_cleared)} unique cells."
         )
-        rows_idx, cols_idx = zip(*unique_coords_cleared, strict=True)
-        grid_data._occupied_np[rows_idx, cols_idx] = False
-        grid_data._color_id_np[rows_idx, cols_idx] = NO_COLOR_ID
+        for r_clear, c_clear in unique_coords_cleared:
+            # Check bounds just in case, though precomputed lines should be valid
+            if grid_data.valid(r_clear, c_clear):
+                grid_data._occupied_np[r_clear, c_clear] = False
+                grid_data._color_id_np[r_clear, c_clear] = NO_COLOR_ID
+            else:
+                log.warning(
+                    f"Attempted to clear out-of-bounds coordinate ({r_clear}, {c_clear}) from line."
+                )
 
-    return (
-        len(cleared_lines_frozensets),
-        unique_coords_cleared,
-        cleared_lines_frozensets,
-    )
+    return len(cleared_lines_fs), unique_coords_cleared, cleared_lines_fs

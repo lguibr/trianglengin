@@ -1,5 +1,3 @@
-# File: trianglengin/tests/core/environment/test_action_codec.py
-# Extracted from alphatriangle/tests/environment/test_actions.py
 import pytest
 
 # Import directly from the library being tested

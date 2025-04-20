@@ -1,22 +1,25 @@
-[![CI Status](https://github.com/lguibr/alphatriangle/actions/workflows/trianglengin_ci_cd.yml/badge.svg)](https://github.com/lguibr/alphatriangle/actions/workflows/trianglengin_ci_cd.yml) <!-- Update workflow name if changed -->
-[![codecov](https://codecov.io/gh/lguibr/alphatriangle/graph/badge.svg?token=YOUR_CODECOV_TOKEN_HERE&flag=trianglengin)](https://codecov.io/gh/lguibr/alphatriangle)
+
+[![CI Status](https://github.com/lguibr/trianglengin/actions/workflows/ci_cd.yml/badge.svg)](https://github.com/lguibr/trianglengin/actions/workflows/ci_cd.yml) <!-- Update workflow name if changed -->
+[![codecov](https://codecov.io/gh/lguibr/trianglengin/graph/badge.svg?token=YOUR_CODECOV_TOKEN_HERE&flag=trianglengin)](https://codecov.io/gh/lguibr/trianglengin) <!-- Update repo name -->
 [![PyPI version](https://badge.fury.io/py/trianglengin.svg)](https://badge.fury.io/py/trianglengin)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python Version](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
 # Triangle Engine (`trianglengin`)
+<img src="bitmap.png" alt="trianglengin logo" width="300"/>
 
-This library provides the core, reusable components for reinforcement learning agents playing a triangle puzzle game, specifically designed for use by the [AlphaTriangle](https://github.com/lguibr/alphatriangle) and potentially MuzeroTriangle projects.
+This library provides the core, reusable components for reinforcement learning agents playing a triangle puzzle game.
 
 It encapsulates:
 
 1.  **Core Game Logic:** Environment rules, state representation, actions.
 2.  **Basic Visualization:** Pygame rendering for interactive play/debug modes.
 3.  **Interaction Handling:** Input processing for interactive modes.
-4.  **Utilities:** General helpers, SumTree, geometry functions, shared types (Planned).
-5.  **Statistics Collection:** The `StatsCollectorActor` (Planned).
-6.  **Feature Extraction:** Logic to convert game state to NN input format (Planned).
-7.  **Data Management Framework:** Structure for saving/loading checkpoints and buffers (Planned).
+4.  **Utilities:** General helpers, geometry functions, shared types.
+5.  **Configuration:** Pydantic models for environment and display settings.
+6.  **(Planned) Feature Extraction:** Logic to convert game state to NN input format.
+7.  **(Planned) Data Management Framework:** Structure for saving/loading checkpoints and buffers.
+8.  **(Planned) Statistics Collection:** Components for tracking game/training stats.
 
 ---
 
@@ -79,13 +82,12 @@ This is the most exciting part! When you place a shape, the game immediately che
   - **Diagonal Lines (Top-Left to Bottom-Right) ↘️:** An unbroken diagonal line of filled triangles stepping down and to the right.
   - **Diagonal Lines (Bottom-Left to Top-Right) ↗️:** An unbroken diagonal line of filled triangles stepping up and to the right.
 
-- **How Lines are Found: The Tracing Method (Transversion)**
+- **How Lines are Found: Pre-calculation of Maximal Lines**
 
-  - **The Idea:** Instead of checking every possible line combination all the time, the game pre-calculates all _potential_ lines (segments of triangles along the three directions) that meet the minimum length requirement when it starts. It does this by "tracing" or "transversing" paths from every playable triangle on the grid.
-  - **Starting Point:** Imagine picking any playable triangle `(r, c)` on the grid.
-  - **Tracing Forwards:** For each direction (Horizontal, Diagonal ↘️, Diagonal ↗️), the game traces _forwards_ from `(r, c)` along that direction's path, adding every valid, playable triangle coordinate to a list.
-  - **Recording Sub-Lines:** As the path is traced, every time the current segment reaches the minimum required length (e.g., 3 triangles), that segment is recorded as a potential line. The tracing continues, and longer segments containing the initial ones are also recorded. For example, if tracing finds `A-B-C-D` and the minimum length is 3, it records `(A,B,C)`, `(B,C,D)`, and `(A,B,C,D)`.
-  - **All Potential Lines:** By doing this starting from _every_ playable triangle for _all three_ directions, and storing only unique lines found, the game builds a complete list of all possible lines that could ever be cleared.
+  - **The Idea:** Instead of checking every possible line combination all the time, the game pre-calculates all *maximal* continuous lines of playable triangles when it starts. A **maximal line** is the longest possible straight segment of *playable* triangles (not in a Death Zone) in one of the three directions (Horizontal, Diagonal ↘️, Diagonal ↗️).
+  - **Tracing:** For every playable triangle on the grid, the game traces outwards in each of the three directions to find the full extent of the continuous playable line passing through that triangle in that direction.
+  - **Storing Maximal Lines:** Only the complete maximal lines found are stored. For example, if tracing finds a playable sequence `A-B-C-D`, only the line `(A,B,C,D)` is stored, not the sub-segments like `(A,B,C)` or `(B,C,D)`. These maximal lines represent the *potential* lines that can be cleared.
+  - **Coordinate Map:** The game also builds a map linking each playable triangle coordinate `(r, c)` to the set of maximal lines it belongs to. This allows for quick lookup.
 
 - **Defining the Paths (Neighbor Logic):** How does the game know which triangle is "next" when tracing? It depends on the current triangle's orientation (🔺 or 🔻) and the direction being traced:
 
@@ -122,10 +124,10 @@ This is the most exciting part! When you place a shape, the game immediately che
     (Path alternates row/col increments depending on orientation)
     ```
 
-- **The "Full Line" Rule:** After you place a piece, the game looks at the coordinates `(r, c)` of the triangles you just placed. It finds all the pre-calculated potential lines that contain _any_ of those coordinates. For each of those potential lines, it checks: "Is _every single triangle coordinate_ in this line now occupied?" If yes, that line is complete!
+- **The "Full Line" Rule:** After you place a piece, the game looks at the coordinates `(r, c)` of the triangles you just placed. Using the pre-calculated map, it finds all the *maximal* lines that contain _any_ of those coordinates. For each of those maximal lines (that have at least 2 triangles), it checks: "Is _every single triangle coordinate_ in this maximal line now occupied?" If yes, that line is complete! (Note: Single isolated triangles don't count as clearable lines).
 
 - **The _Poof_! 💨:**
-  - If placing your shape completes one or MORE lines (of any type) simultaneously, all the triangles in ALL completed lines vanish instantly!
+  - If placing your shape completes one or MORE maximal lines (of any type, length >= 2) simultaneously, all the triangles in ALL completed lines vanish instantly!
   - The spaces become empty again.
   - You score points for _every single triangle_ that vanished. Clearing multiple lines at once is the best way to rack up points! 🥳
 
@@ -142,7 +144,7 @@ This is the most exciting part! When you place a shape, the game immediately che
 So, how does the game end?
 
 - **The Condition:** The game is over when you **cannot legally place _any_ of the three shapes currently available in your preview slots anywhere on the grid.**
-- **The Check:** After every move (placing a shape and any resulting line clears), the game checks: "Is there at least one valid spot on the grid for Shape 1? OR for Shape 2? OR for Shape 3?"
+- **The Check:** After every move (placing a shape and any resulting line clears), and after any potential shape refill, the game checks: "Is there at least one valid spot on the grid for Shape 1? OR for Shape 2? OR for Shape 3?"
 - **No More Moves:** If the answer is "NO" for all three shapes (meaning none of them can be placed anywhere according to the Placement Rules), then the game immediately ends.
 - **Strategy:** This means you need to be careful! Don't fill up the grid in a way that leaves no room for the types of shapes you might get later. Always try to keep options open! 🤔
 
@@ -152,21 +154,18 @@ That's it! Now you know all the rules. Go forth and conquer the Triangle Puzzle!
 
 ## Purpose
 
-The primary goal is to avoid code duplication between different RL agent implementations (like AlphaZero and MuZero) that operate on the same underlying game environment. By extracting the common backend logic and basic interactive UI into this installable library, the main agent projects can focus solely on their specific algorithms (MCTS variations, NN architectures, training loops, advanced visualization).
+The primary goal is to provide a self-contained, installable library for the core logic and basic interactive UI of the triangle puzzle game. This allows different RL agent implementations or other applications to build upon a consistent and well-defined game backend, avoiding code duplication.
 
 ## Installation
 
 ```bash
-# For development (from the trianglengin root directory):
-pip install -e .[dev]
-
 # For standard use (once published or built):
 pip install trianglengin
 ```
 
 ## Running Interactive Modes
 
-After installing (`pip install -e .` or `pip install trianglengin`), you can run the interactive modes directly:
+After installing (`pip install trianglengin`), you can run the interactive modes directly:
 
 - **Play Mode:**
   ```bash
@@ -177,26 +176,79 @@ After installing (`pip install -e .` or `pip install trianglengin`), you can run
   trianglengin debug [--seed 42] [--log-level DEBUG]
   ```
 
+---
+
 ## Local Development & Testing
 
-1.  **Setup:**
+These instructions are for developers contributing to `trianglengin`.
 
-    - Clone the repository.
-    - Create and activate a virtual environment (`python -m venv venv && source venv/bin/activate`).
-    - Install in editable mode with development dependencies: `pip install -e .[dev]`
+1.  **Clone the Repository:**
+    ```bash
+    git clone https://github.com/lguibr/trianglengin.git
+    cd trianglengin
+    ```
 
-2.  **Running Checks:**
-    - **Tests & Coverage:** `pytest tests/ --cov=trianglengin --cov-report=xml` (Generates `coverage.xml` for upload)
-    - **Linting:** `ruff check .`
-    - **Formatting:** `ruff format .`
-    - **Type Checking:** `mypy trianglengin/`
+2.  **Create and Activate Virtual Environment:**
+    *   **Using `venv` (Recommended):**
+        ```bash
+        python -m venv venv
+        # On Linux/macOS:
+        source venv/bin/activate
+        # On Windows (Command Prompt):
+        # .\venv\Scripts\activate
+        # On Windows (PowerShell):
+        # .\venv\Scripts\Activate.ps1
+        ```
+    *   **Using `conda`:**
+        ```bash
+        conda create -n trianglengin python=3.10
+        conda activate trianglengin
+        ```
+    **IMPORTANT:** Ensure your virtual environment is activated in your terminal *before* proceeding to the next step. You should see `(venv)` or `(trianglengin)` at the beginning of your terminal prompt.
+
+3.  **Install in Editable Mode with Dev Dependencies:**
+    *   **Make sure your virtual environment is active!**
+    *   Run the following command from the project root directory (where `pyproject.toml` is located):
+        ```bash
+        # Use quotes to prevent shell expansion issues (especially in Zsh)
+        pip install -e '.[dev]'
+        ```
+        **Note the syntax:** `'.[dev]'` includes the optional development dependencies, and the quotes prevent the shell from misinterpreting the brackets.
+        This installs the `trianglengin` package itself in a way that your code changes are immediately reflected, *and* it installs all the tools needed for testing and development (`pytest`, `ruff`, `mypy`, etc.).
+
+4.  **Running Checks:**
+    *   **Make sure your virtual environment is active!**
+    *   **Tests & Coverage:**
+        ```bash
+        pytest tests/ --cov=trianglengin --cov-report=xml
+        ```
+        (This generates `coverage.xml` for upload if using Codecov).
+        To just run tests: `pytest`
+    *   **Linting:**
+        ```bash
+        ruff check .
+        ```
+    *   **Formatting:**
+        ```bash
+        ruff format .
+        ```
+    *   **Type Checking:**
+        ```bash
+        mypy trianglengin/
+        ```
+
+5.  **Troubleshooting "command not found" errors:**
+    *   If you see errors like `pytest: command not found`, `ruff: command not found`, or `mypy: command not found`, the **most likely cause** is that your virtual environment is **not activated**. Go back to Step 2 and activate it.
+    *   If the environment is active, double-check that you ran `pip install -e '.[dev]'` correctly in Step 3 (with the quotes and square brackets).
+
+---
 
 ## Project Structure
 
 ```
 trianglengin/
 ├── .github/workflows/      # GitHub Actions CI/CD
-│   └── trianglengin_ci_cd.yml
+│   └── ci_cd.yml
 ├── trianglengin/           # Source code for the library package
 │   ├── __init__.py         # Exposes public API
 │   ├── app.py              # Interactive mode application runner
@@ -204,25 +256,25 @@ trianglengin/
 │   ├── core/               # Core game logic
 │   │   ├── __init__.py
 │   │   ├── structs/        # Triangle, Shape, constants
-│   │   │   └── README.md
+│   │   │   └── README.md   # Link: trianglengin/core/structs/README.md
 │   │   └── environment/    # GameState, GridData, GridLogic, ShapeLogic, ActionCodec
-│   │       └── README.md   # Includes Grid, Shapes, Logic sub-packages
+│   │       └── README.md   # Link: trianglengin/core/environment/README.md
 │   ├── interaction/        # User input handling for interactive modes
-│   │   └── README.md
+│   │   └── README.md       # Link: trianglengin/interaction/README.md
 │   ├── visualization/      # Basic Pygame rendering components
 │   │   ├── __init__.py
 │   │   ├── core/           # Visualizer, layout, colors, fonts, coord_mapper
-│   │   │   └── README.md
+│   │   │   └── README.md   # Link: trianglengin/visualization/core/README.md
 │   │   └── drawing/        # Specific drawing functions (grid, shapes, previews, hud)
-│   │       └── README.md
+│   │       └── README.md   # Link: trianglengin/visualization/drawing/README.md
 │   ├── features/           # Feature extraction logic (Planned)
-│   │   └── README.md
+│   │   └── README.md       # Link: trianglengin/features/README.md
 │   ├── data/               # Data management framework (Planned)
-│   │   └── README.md
+│   │   └── README.md       # Link: trianglengin/data/README.md
 │   ├── stats/              # Statistics collection actor (Planned)
-│   │   └── README.md
-│   ├── utils/              # General utilities (Planned)
-│   │   └── README.md
+│   │   └── README.md       # Link: trianglengin/stats/README.md
+│   ├── utils/              # General utilities
+│   │   └── README.md       # Link: trianglengin/utils/README.md
 │   └── config/             # Shared configuration models
 │       ├── __init__.py
 │       ├── env_config.py   # Environment configuration (EnvConfig)
@@ -232,9 +284,9 @@ trianglengin/
 │   ├── conftest.py         # Shared test fixtures
 │   ├── core/
 │   │   ├── __init__.py
-│   │   ├── environment/
+│   │   ├── environment/    # Contains test_grid_logic.py now
 │   │   └── structs/
-│   └── README.md
+│   └── README.md           # Link: tests/README.md
 ├── .gitignore
 ├── pyproject.toml          # Build config, dependencies
 ├── README.md               # This file
@@ -242,7 +294,7 @@ trianglengin/
 └── MANIFEST.in
 ```
 
-## Core Components (Phase 1 + Interactive UI)
+## Core Components
 
 - **`trianglengin.core`**: Contains the fundamental game logic.
   - **`structs`**: Defines `Triangle`, `Shape`, and related constants. ([`core/structs/README.md`](trianglengin/core/structs/README.md))
@@ -252,8 +304,8 @@ trianglengin/
 - **`trianglengin.interaction`**: Input handling for interactive modes (`InputHandler`). ([`interaction/README.md`](trianglengin/interaction/README.md))
 - **`trianglengin.app`**: Integrates components for interactive modes.
 - **`trianglengin.cli`**: Command-line interface for `play`/`debug`.
-
+- **`trianglengin.utils`**: General utility functions and types. ([`utils/README.md`](trianglengin/utils/README.md))
 
 ## Contributing
 
-Please refer to the main [AlphaTriangle repository](https://github.com/lguibr/alphatriangle) for contribution guidelines. Ensure that changes here remain compatible with the projects using this library. Keep READMEs updated.
+Contributions are welcome! Please open an issue or submit a pull request on the [GitHub repository](https://github.com/lguibr/trianglengin). Ensure that changes maintain code quality (pass tests, linting, type checking) and keep READMEs updated.

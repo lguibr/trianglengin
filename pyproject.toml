@@ -1,4 +1,4 @@
-
+# File: pyproject.toml
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 name = "trianglengin"
 version = "0.1.0" # Initial version
 authors = [{ name="Luis Guilherme P. M.", email="lgpelin92@gmail.com" }]
-description = "Core engine (game logic, features, data) for AlphaTriangle/MuzeroTriangle."
+description = "Core engine (game logic, features, data) for a triangle puzzle game." # Updated description
 readme = "README.md"
 license = { file="LICENSE" }
 requires-python = ">=3.10"
@@ -27,29 +27,26 @@ dependencies = [
     "typing_extensions>=4.0.0",
     "pygame>=2.1.0", # Added Pygame
     "typer[all]>=0.9.0", # Added Typer for CLI
-    # Add other core dependencies as needed (e.g., numba if grid_features moves here later)
-    # Keep Ray out for now unless StatsCollector moves here
+    # Add other core dependencies as needed
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/lguibr/alphatriangle" # Link to the main project for now
-"Bug Tracker" = "https://github.com/lguibr/alphatriangle/issues"
+"Homepage" = "https://github.com/lguibr/trianglengin" # Updated URL
+"Bug Tracker" = "https://github.com/lguibr/trianglengin/issues" # Updated URL
 
-# --- ADDED: Script Entry Point ---
 [project.scripts]
 trianglengin = "trianglengin.cli:app"
-# --- END ADDED ---
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=3.0.0",
-    "pytest-mock>=3.0.0", # Add if mocking is needed in tests
+    "pytest-mock>=3.0.0",
     "ruff",
     "mypy",
     "build",
     "twine",
-    "codecov", # If using codecov
+    "codecov",
     # Add Ray here if testing StatsCollectorActor locally
     # "ray>=2.8.0",
 ]

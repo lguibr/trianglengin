@@ -1,47 +1,38 @@
-# File: trianglengin/trianglengin/core/environment/grid/README.md
-# Environment Grid Submodule (`trianglengin.environment.grid`)
+# File: tests/core/environment/README.md
+# Environment Tests (`tests/core/environment`)
 
-## Purpose and Architecture
+## Purpose
 
-This submodule manages the game's grid structure and related logic. It defines the triangular cells, their properties, relationships, and operations like placement validation and line clearing.
+This directory contains tests specifically for the game environment's core functionality, primarily focusing on the **Python `GameState` wrapper** which interacts with the underlying C++ engine.
 
--   **Cell Representation:** The `Triangle` class (defined in [`trianglengin.core.structs`](../../structs/README.md)) represents a single cell, storing its position and orientation (`is_up`). The actual state (occupied, death, color) is managed within `GridData`.
--   **Grid Data Structure:** The [`GridData`](grid_data.py) class holds the grid state using efficient `numpy` arrays (`_occupied_np`, `_death_np`, `_color_id_np`). It also manages precomputed information about potential lines (sets of coordinates) for efficient clearing checks.
--   **Grid Logic:** The [`logic.py`](logic.py) module (exposed as `GridLogic`) contains functions operating on `GridData`. This includes:
-    -   Initializing the grid based on `EnvConfig` (defining death zones).
-    -   Precomputing potential lines (`_precompute_lines`) and indexing them (`_initialize_lines_and_index`) for efficient checking.
-    -   Checking if a shape can be placed (`can_place`), **including matching triangle orientations**.
-    -   Checking for and clearing completed lines (`check_and_clear_lines`). **This function does NOT implement gravity.**
--   **Grid Features:** Note: Any functions related to calculating scalar metrics (heights, holes, bumpiness) are expected to be handled outside this core engine library, likely in the main `alphatriangle` project's features module.
+-   **[`test_game_state.py`](test_game_state.py):** This is the main test suite. It verifies the behavior of the `trianglengin.game_interface.GameState` Python class. Tests cover:
+    -   Initialization and reset.
+    -   Valid and invalid `step` calls.
+    -   Score calculation (placement, line clearing, penalties).
+    -   Game over conditions (`is_over`, `get_game_over_reason`).
+    -   Retrieval of state information (`get_grid_data_np`, `get_shapes`).
+    -   Valid action calculation (`valid_actions`).
+    -   State copying (`copy`).
+    -   Debug functionality (`debug_toggle_cell`).
 
-## Exposed Interfaces
+## Approach
 
--   **Classes:**
-    -   `GridData`: Holds the grid state using NumPy arrays.
-        -   `__init__(config: EnvConfig)`
-        -   `valid(r: int, c: int) -> bool`
-        -   `is_death(r: int, c: int) -> bool`
-        -   `is_occupied(r: int, c: int) -> bool`
-        -   `get_color_id(r: int, c: int) -> int`
-        -   `get_occupied_state() -> np.ndarray`
-        -   `get_death_state() -> np.ndarray`
-        -   `get_color_id_state() -> np.ndarray`
-        -   `deepcopy() -> GridData`
--   **Modules/Namespaces:**
-    -   `logic` (often imported as `GridLogic`):
-        -   `can_place(grid_data: GridData, shape: Shape, r: int, c: int) -> bool`
-        -   `check_and_clear_lines(grid_data: GridData, newly_occupied_coords: Set[Tuple[int, int]]) -> Tuple[int, Set[Tuple[int, int]], Set[frozenset[Tuple[int, int]]]]` **(Returns: lines_cleared_count, unique_coords_cleared_set, set_of_cleared_lines_coord_sets)**
+Since the core game logic (grid operations, shape handling, line clearing, action validation) is implemented in C++, these tests primarily focus on ensuring the Python wrapper correctly interfaces with the C++ module (`trianglengin_cpp`). They validate that:
+
+1.  Python methods call the corresponding C++ functions.
+2.  Data is correctly transferred between Python and C++ (e.g., configurations, grid state, shapes, actions, rewards).
+3.  The wrapper handles edge cases and errors appropriately (e.g., invalid actions).
+4.  The overall game flow (steps, resets, game over) behaves as expected from the Python perspective.
+
+Direct testing of individual C++ functions or classes would typically be done using a C++ testing framework (like Google Test), which is outside the scope of these Python tests.
 
 ## Dependencies
 
--   **[`trianglengin.config`](../../../config/README.md)**:
-    -   `EnvConfig`: Used by `GridData` initialization and logic functions.
--   **[`trianglengin.core.structs`](../../structs/README.md)**:
-    -   Uses `Triangle`, `Shape`, `NO_COLOR_ID`.
--   **`numpy`**:
-    -   Used extensively in `GridData`.
--   **Standard Libraries:** `typing`, `logging`, `numpy`, `copy`.
+-   **`pytest`**: Test runner and fixtures.
+-   **`numpy`**: Used for checking grid data arrays.
+-   **`trianglengin.game_interface`**: The `GameState` wrapper and `Shape` class being tested.
+-   **`trianglengin.config`**: `EnvConfig` used for setup.
 
 ---
 
-**Note:** Please keep this README updated when changing the grid structure, cell properties, placement rules, or line clearing logic. Accurate documentation is crucial for maintainability.
+**Note:** Keep this README updated if the testing strategy changes or significant new test files related to the environment wrapper are added.

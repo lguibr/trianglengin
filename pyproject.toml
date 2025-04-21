@@ -1,13 +1,18 @@
-# File: pyproject.toml
+
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = [
+    "setuptools>=61.0",
+    "wheel",
+    "pybind11>=2.10",
+    "cmake>=3.14",
+]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "trianglengin"
-version = "1.0.6" # Updated version
+version = "2.0.0"
 authors = [{ name="Luis Guilherme P. M.", email="lgpelin92@gmail.com" }]
-description = "Core engine (game logic, features, data) for a triangle puzzle game." # Updated description
+description = "High-performance C++/Python engine for a triangle puzzle game." # Updated description
 readme = "README.md"
 license = { file="LICENSE" }
 requires-python = ">=3.10"
@@ -15,29 +20,32 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: C++", # Added C++ classifier
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Games/Entertainment :: Puzzle Games",
-    "Development Status :: 4 - Beta", # Consider updating status if appropriate for 1.0.0
+    "Development Status :: 4 - Beta",
 ]
 dependencies = [
+    # Core dependencies + UI dependencies are now required
     "numpy>=1.20.0",
     "pydantic>=2.0.0",
     "typing_extensions>=4.0.0",
-    "pygame>=2.1.0", # Added Pygame
-    "typer[all]>=0.9.0", # Added Typer for CLI
-    # Add other core dependencies as needed
+    "pygame>=2.1.0",
+    "typer[all]>=0.9.0",
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/lguibr/trianglengin" # Updated URL
-"Bug Tracker" = "https://github.com/lguibr/trianglengin/issues" # Updated URL
+"Homepage" = "https://github.com/lguibr/trianglengin"
+"Bug Tracker" = "https://github.com/lguibr/trianglengin/issues"
 
 [project.scripts]
-trianglengin = "trianglengin.cli:app"
+# Script now points to the CLI inside the 'ui' subpackage
+trianglengin = "trianglengin.ui.cli:app"
 
 [project.optional-dependencies]
+# UI section removed
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=3.0.0",
@@ -47,24 +55,26 @@ dev = [
     "build",
     "twine",
     "codecov",
-    # Add Ray here if testing StatsCollectorActor locally
-    # "ray>=2.8.0",
+    # No need to list pygame/typer here anymore
 ]
 
-[tool.setuptools.packages.find]
-where = ["."] # Search for packages in the root directory
+[tool.setuptools]
+# package_dir is removed from here - handled by setup.py
+# include-package-data = true # Optional: Keep if you rely on MANIFEST.in for data files
 
 [tool.setuptools.package-data]
-"*" = ["*.txt", "*.md", "*.json"] # Include non-code files
+# Include C++ headers if needed, py.typed, etc.
+"trianglengin" = ["py.typed", "cpp/*.h"]
 
-# --- Tool Configurations (Optional but Recommended) ---
+# --- Tool Configurations ---
 
 [tool.ruff]
 line-length = 88
+src = ["src", "tests"] # Specify source directories
 
 [tool.ruff.lint]
-select = ["E", "W", "F", "I", "UP", "B", "C4", "ARG", "SIM", "TCH", "PTH", "NPY"]
-ignore = ["E501"] # Ignore line length errors if needed selectively
+select = ["E", "W", "F", "I", "UP", "B", "C4", "ARG", "SIM", "TCH", "PTH", "NPY", "PYI"] # Added PYI for stubs
+ignore = ["E501"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -73,28 +83,42 @@ quote-style = "double"
 python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
-ignore_missing_imports = true # Start with true, gradually reduce
+ignore_missing_imports = false # Be stricter
+disallow_untyped_defs = true
+# Specify source directory for mypy
+files = ["src/trianglengin", "tests"]
+
+[[tool.mypy.overrides]]
+# Ignore the compiled C++ extension module
+module = "trianglengin.trianglengin_cpp"
+ignore_missing_imports = true
+
+# No longer need overrides for pygame/typer as they are required
+
 
 [tool.pytest.ini_options]
 minversion = "7.0"
-addopts = "-ra -q --cov=trianglengin --cov-report=term-missing"
+# Update coverage path
+addopts = "-ra -q --cov=src/trianglengin --cov-report=term-missing"
 testpaths = [
     "tests",
 ]
 
 [tool.coverage.run]
+source = ["src/trianglengin"] # Specify source for coverage
 omit = [
-    "*/__init__.py",
-    "*/README.md",
-    "trianglengin/config/*", # Config models are mostly declarative
-    "trianglengin/utils/types.py", # Simple type aliases
-    "trianglengin/core/structs/*", # Simple data structures
-    "trianglengin/app.py", # UI App difficult to cover fully
-    "trianglengin/cli.py", # CLI difficult to cover fully
-    "trianglengin/visualization/core/fonts.py", # Font loading depends on system
-    "tests/*", # Exclude tests from coverage report
+    "src/trianglengin/__init__.py",
+    "src/trianglengin/cpp/*", # Exclude C++ source from Python coverage
+    "src/trianglengin/config/env_config.py", # Keep config covered (only env_config)
+    "src/trianglengin/utils/types.py",
+    # Omit the entire UI package
+    "src/trianglengin/ui/*",
+    # Omit the now empty core package
+    "src/trianglengin/core/*",
+    "tests/*",
+    "setup.py",
 ]
 
 [tool.coverage.report]
-fail_under = 50 # Start with a reasonable target for core logic
+fail_under = 70 # Increased target coverage for core logic
 show_missing = true

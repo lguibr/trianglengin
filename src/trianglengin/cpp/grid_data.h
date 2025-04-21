@@ -48,10 +48,9 @@ namespace trianglengin::cpp
     int rows() const { return rows_; }
     int cols() const { return cols_; }
 
-    // Copy constructor
-    GridData(const GridData &other);
-    // Copy assignment operator
-    GridData &operator=(const GridData &other);
+    // --- Explicit Copy Control ---
+    GridData(const GridData &other);            // Copy constructor
+    GridData &operator=(const GridData &other); // Copy assignment operator
 
     // Default move constructor/assignment should work now
     GridData(GridData &&other) noexcept = default;

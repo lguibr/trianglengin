@@ -44,7 +44,7 @@ namespace trianglengin::cpp
     precompute_lines();
   }
 
-  // Copy constructor: Copy the config_ member
+  // Copy constructor: Explicitly copy all members
   GridData::GridData(const GridData &other)
       : config_(other.config_), // Copy config value
         rows_(other.rows_),
@@ -55,9 +55,11 @@ namespace trianglengin::cpp
         lines_(other.lines_),
         coord_to_lines_map_(other.coord_to_lines_map_)
   {
+    // All members are copyable, default member-wise copy is sufficient here,
+    // but being explicit ensures correctness if members change later.
   }
 
-  // Copy assignment operator: Copy the config_ member
+  // Copy assignment operator: Explicitly copy all members
   GridData &GridData::operator=(const GridData &other)
   {
     if (this != &other)
@@ -103,7 +105,8 @@ namespace trianglengin::cpp
     {
       throw std::out_of_range("Coordinates (" + std::to_string(r) + "," + std::to_string(c) + ") out of bounds.");
     }
-    return !death_grid_[r][c] && occupied_grid_[r][c];
+    // An occupied cell cannot be a death cell by game logic after placement/clearing
+    return occupied_grid_[r][c];
   }
 
   std::optional<int> GridData::get_color_id(int r, int c) const
@@ -190,6 +193,7 @@ namespace trianglengin::cpp
         for (const auto &direction : directions)
         {
           Coord line_start_coord = start_coord;
+          // Find the true start of the line segment in this direction
           while (true)
           {
             auto prev_coord_opt = get_neighbor(std::get<0>(line_start_coord), std::get<1>(line_start_coord), direction, true);
@@ -200,8 +204,11 @@ namespace trianglengin::cpp
             else
               break;
           }
+          // Check if we already processed this line starting from this coordinate and direction
           if (processed_starts.count({line_start_coord, direction}))
             continue;
+
+          // Trace the line forward from the true start
           Line current_line;
           std::optional<Coord> trace_coord_opt = line_start_coord;
           while (trace_coord_opt && is_live(std::get<0>(*trace_coord_opt), std::get<1>(*trace_coord_opt)))
@@ -209,7 +216,9 @@ namespace trianglengin::cpp
             current_line.push_back(*trace_coord_opt);
             trace_coord_opt = get_neighbor(std::get<0>(*trace_coord_opt), std::get<1>(*trace_coord_opt), direction, false);
           }
-          if (current_line.size() >= 2)
+
+          // Store the line if it's long enough and mark it as processed
+          if (current_line.size() >= 2) // Only store lines of length 2 or more
           {
             maximal_lines_set.insert(current_line);
             processed_starts.insert({line_start_coord, direction});
@@ -218,16 +227,20 @@ namespace trianglengin::cpp
       }
     }
 
+    // Convert set to vector and sort for deterministic order
     lines_ = std::vector<Line>(maximal_lines_set.begin(), maximal_lines_set.end());
     std::sort(lines_.begin(), lines_.end(), [](const Line &a, const Line &b)
               {
-            if (a.empty() || b.empty()) return b.empty();
+            if (a.empty() || b.empty()) return b.empty(); // Handle empty lines if they somehow occur
+            // Sort primarily by starting row, then starting column, then size
             if (std::get<0>(a[0]) != std::get<0>(b[0])) return std::get<0>(a[0]) < std::get<0>(b[0]);
             if (std::get<1>(a[0]) != std::get<1>(b[0])) return std::get<1>(a[0]) < std::get<1>(b[0]);
             return a.size() < b.size(); });
 
+    // Build the coordinate-to-lines map
     for (const auto &line_vec : lines_)
     {
+      // Use a set of Coords (LineFs) as the value in the map for efficient lookup
       LineFs line_fs(line_vec.begin(), line_vec.end());
       for (const auto &coord : line_vec)
       {

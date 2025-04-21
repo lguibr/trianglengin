@@ -27,6 +27,13 @@ namespace trianglengin::cpp
   public:
     explicit GameStateCpp(const EnvConfigCpp &config, unsigned int initial_seed);
 
+    // --- Rule of 5 ---
+    ~GameStateCpp() = default;                                        // Default destructor
+    GameStateCpp(const GameStateCpp &other);                          // Copy constructor
+    GameStateCpp &operator=(const GameStateCpp &other);               // Copy assignment operator
+    GameStateCpp(GameStateCpp &&other) noexcept = default;            // Default move constructor
+    GameStateCpp &operator=(GameStateCpp &&other) noexcept = default; // Default move assignment operator
+
     void reset();
     std::tuple<double, bool> step(Action action);
     bool is_over() const;
@@ -34,7 +41,7 @@ namespace trianglengin::cpp
     const std::set<Action> &get_valid_actions(bool force_recalculate = false);
     int get_current_step() const;
     std::optional<std::string> get_game_over_reason() const;
-    GameStateCpp copy() const;
+    GameStateCpp copy() const; // Keep Python-facing copy method
     void debug_toggle_cell(int r, int c);
     void invalidate_action_cache(); // Moved to public
     // Debug method to force shapes into slots
@@ -46,6 +53,8 @@ namespace trianglengin::cpp
     const std::vector<std::optional<ShapeCpp>> &get_shapes() const { return shapes_; }
     std::vector<std::optional<ShapeCpp>> &get_shapes_mut() { return shapes_; }
     const EnvConfigCpp &get_config() const { return config_; }
+    // Expose RNG state for copying if needed (or handle seeding in copy)
+    std::mt19937 get_rng_state() const { return rng_; }
 
   private:
     EnvConfigCpp config_;

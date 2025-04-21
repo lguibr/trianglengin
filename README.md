@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python Version](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
-# Triangle Engine (`trianglengin`) v2
+# Triangle Engine (`trianglengin`) v2.0.3
 <img src="bitmap.png" alt="trianglengin logo" width="300"/>
 
 **Version 2 introduces a high-performance C++ core for the game logic.**
@@ -43,7 +43,7 @@ The primary goal is to provide a self-contained, installable library with a high
 
 ```bash
 # For standard use (once published or built):
-pip install trianglengin
+pip install trianglengin>=2.0.3
 
 # Building from source (requires compiler and CMake):
 git clone https://github.com/lguibr/trianglengin.git
@@ -198,7 +198,7 @@ trianglengin/
 ## Core Components (v2)
 
 - **`trianglengin.cpp` (C++ Core)**: Implements the high-performance game logic (state, grid, shapes, rules). Not directly imported in Python.
-- **`trianglengin.game_interface.GameState` (Python Wrapper)**: The primary Python class for interacting with the game engine. It holds a reference to the C++ game state object and provides methods like `step`, `reset`, `is_over`, `valid_actions`, `get_shapes`, `get_grid_data_np`.
+- **`trianglengin.game_interface.GameState` (Python Wrapper)**: The primary Python class for interacting with the game engine. It holds a reference to the C++ game state object and provides methods like `step`, `reset`, `is_over`, `valid_actions`, `get_shapes`, `get_grid_data_np`, **`get_outcome`**.
 - **`trianglengin.config.EnvConfig`**: Python Pydantic model for core environment configuration. Passed to C++ core during initialization.
 - **`trianglengin.utils`**: General Python utility functions and types. ([`src/trianglengin/utils/README.md`](src/trianglengin/utils/README.md))
 

@@ -8,6 +8,7 @@ import numpy as np
 from .config import EnvConfig
 
 try:
+    # Keep the alias for clarity within this file
     import trianglengin.trianglengin_cpp as cpp_module
 except ImportError as e:
     raise ImportError(
@@ -126,6 +127,19 @@ class GameState:
         """Returns the current accumulated score."""
         # C++ returns double, cast might be redundant but safe for mypy
         return cast("float", self._cpp_state.get_score())
+
+    def get_outcome(self) -> float:
+        """
+        Returns the final outcome of the game if it's over, otherwise 0.0.
+        Required by MCTS implementations like trimcts.
+        """
+        if self.is_over():
+            # In this game, the final score is the outcome.
+            # Adjust if a different outcome definition is needed (e.g., +1 win, -1 loss).
+            return self.game_score()
+        else:
+            # MCTS typically expects 0 for non-terminal states during simulation.
+            return 0.0
 
     def valid_actions(self, force_recalculate: bool = False) -> set[int]:
         """

@@ -1,7 +1,7 @@
-
+# File: pyproject.toml
 [build-system]
 requires = [
-    "setuptools>=61.0",
+    "setuptools>=61.0", # Keep >=61 for find_packages support if needed, >=77 for new license format preferred
     "wheel",
     "pybind11>=2.10",
     "cmake>=3.14",
@@ -10,18 +10,20 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "trianglengin"
-version = "2.0.0"
+version = "2.0.0" # Major version bump for C++ refactor
 authors = [{ name="Luis Guilherme P. M.", email="lgpelin92@gmail.com" }]
 description = "High-performance C++/Python engine for a triangle puzzle game." # Updated description
 readme = "README.md"
-license = { file="LICENSE" }
+# Use SPDX identifier string and specify license file(s)
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: C++", # Added C++ classifier
-    "License :: OSI Approved :: MIT License",
+    # REMOVED: "License :: OSI Approved :: MIT License", # Deprecated classifier
     "Operating System :: OS Independent",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Games/Entertainment :: Puzzle Games",
@@ -120,5 +122,11 @@ omit = [
 ]
 
 [tool.coverage.report]
-fail_under = 70 # Increased target coverage for core logic
+fail_under = 80 # Increased target coverage for core logic
 show_missing = true
+
+# Optional: Add cibuildwheel configuration if needed
+# [tool.cibuildwheel]
+# skip = "pp*"  # Example: Skip PyPy builds
+# test-requires = "pytest" # Dependencies needed for tests run by cibuildwheel
+# test-command = "pytest {project}/tests" # Command to run tests after building wheel

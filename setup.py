@@ -12,13 +12,13 @@ from setuptools import Extension, find_packages, setup
 from setuptools.command.build_ext import build_ext
 from setuptools.command.develop import develop as _develop
 
-# Convert distutils Windows platform specifiers to CMake -A arguments
-PLAT_TO_CMAKE = {
-    "win32": "Win32",
-    "win-amd64": "x64",
-    "win-arm32": "ARM",
-    "win-arm64": "ARM64",
-}
+# REMOVED: Unused PLAT_TO_CMAKE dictionary
+# PLAT_TO_CMAKE = {
+#     "win32": "Win32",
+#     "win-amd64": "x64",
+#     "win-arm32": "ARM",
+#     "win-arm64": "ARM64",
+# }
 
 
 # A CMakeExtension needs a sourcedir instead of a file list.
@@ -73,8 +73,9 @@ class CMakeBuild(build_ext):
         if self.compiler.compiler_type == "msvc" and not any(
             x in cmake_generator for x in {"NMake", "Ninja"}
         ):
-            cmake_args += ["-A", PLAT_TO_CMAKE[self.plat_name]]
-            build_args += ["--", "/m"]
+            # REMOVED: Do not force architecture with -A; let cibuildwheel/CMake handle it.
+            # cmake_args += ["-A", PLAT_TO_CMAKE[self.plat_name]]
+            build_args += ["--", "/m"]  # Keep multi-process build for MSVC
 
         # Combine nested ifs using 'and'
         if (

@@ -4,7 +4,7 @@
 #include "shape_logic.h"
 #include <stdexcept>
 #include <numeric>
-#include <iostream>  // <--- Add iostream
+#include <iostream>  // Keep iostream if other debug logs might be added later, or remove if not needed
 #include <algorithm> // For std::min
 
 namespace trianglengin::cpp
@@ -41,8 +41,7 @@ namespace trianglengin::cpp
     if (!game_over_ && valid_actions_cache_ && valid_actions_cache_->empty())
     {
       force_game_over("No valid actions available at start.");
-      // Log the reason for immediate game over
-      std::cerr << "[GameStateCpp::check_initial_state_game_over] Forced game over: No valid actions at start." << std::endl;
+      // REMOVED C++ Log: std::cerr << "[GameStateCpp::check_initial_state_game_over] Forced game over: No valid actions at start." << std::endl;
     }
   }
 
@@ -218,8 +217,7 @@ namespace trianglengin::cpp
     if (!game_over_ && valid_actions_cache_->empty())
     {
       force_game_over("No valid actions available.");
-      // Log the reason for game over after calculation
-      std::cerr << "[GameStateCpp::get_valid_actions] Forced game over: No valid actions found after calculation." << std::endl;
+      // REMOVED C++ Log: std::cerr << "[GameStateCpp::get_valid_actions] Forced game over: No valid actions found after calculation." << std::endl;
     }
     return *valid_actions_cache_;
   }
@@ -235,8 +233,7 @@ namespace trianglengin::cpp
     if (game_over_)
     {
       valid_actions_cache_ = std::set<Action>();
-      // Add logging for this case too
-      std::cerr << "[GameStateCpp::calculate_valid_actions_internal] Game already over. Returning empty set." << std::endl;
+      // REMOVED C++ Log: std::cerr << "[GameStateCpp::calculate_valid_actions_internal] Game already over. Returning empty set." << std::endl;
       return;
     }
     std::set<Action> valid_actions;
@@ -260,19 +257,15 @@ namespace trianglengin::cpp
             valid_actions.insert(encode_action(shape_idx, r, c));
             can_place_true_count++; // Increment counter
           }
-          // Optional: Log failed attempts if needed for deep debugging
-          // else {
-          //     std::cerr << "[Debug] can_place failed for shape " << shape_idx << " at (" << r << "," << c << ")" << std::endl;
-          // }
         }
       }
     }
-    // Add logging here
-    std::cerr << "[GameStateCpp::calculate_valid_actions_internal] Step: " << current_step_
-              << ", Attempts: " << attempts_count
-              << ", CanPlaceTrue: " << can_place_true_count
-              << ", ValidActionsFound: " << valid_actions.size()
-              << std::endl;
+    // REMOVED C++ Log:
+    // std::cerr << "[GameStateCpp::calculate_valid_actions_internal] Step: " << current_step_
+    //           << ", Attempts: " << attempts_count
+    //           << ", CanPlaceTrue: " << can_place_true_count
+    //           << ", ValidActionsFound: " << valid_actions.size()
+    //           << std::endl;
 
     // Use mutable cache
     valid_actions_cache_ = std::move(valid_actions);

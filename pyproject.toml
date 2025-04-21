@@ -10,7 +10,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "trianglengin"
-version = "2.0.3" # Incremented version
+version = "2.0.4" # Incremented version
 authors = [{ name="Luis Guilherme P. M.", email="lgpelin92@gmail.com" }]
 description = "High-performance C++/Python engine for a triangle puzzle game." # Updated description
 readme = "README.md"

@@ -4,7 +4,7 @@
 #include "shape_logic.h"
 #include <stdexcept>
 #include <numeric>
-#include <iostream>
+#include <iostream>  // <--- Add iostream
 #include <algorithm> // For std::min
 
 namespace trianglengin::cpp
@@ -37,10 +37,12 @@ namespace trianglengin::cpp
 
   void GameStateCpp::check_initial_state_game_over()
   {
-    get_valid_actions(true);
+    get_valid_actions(true); // This calls calculate_valid_actions_internal
     if (!game_over_ && valid_actions_cache_ && valid_actions_cache_->empty())
     {
       force_game_over("No valid actions available at start.");
+      // Log the reason for immediate game over
+      std::cerr << "[GameStateCpp::check_initial_state_game_over] Forced game over: No valid actions at start." << std::endl;
     }
   }
 
@@ -168,9 +170,15 @@ namespace trianglengin::cpp
   {
     if (game_over_)
       return true;
+    // If cache exists, use it. Otherwise, calculate.
     if (valid_actions_cache_.has_value())
       return valid_actions_cache_->empty();
-    calculate_valid_actions_internal();
+    // Need to remove const to calculate and potentially set game_over_
+    const_cast<GameStateCpp *>(this)->calculate_valid_actions_internal();
+    // Check game_over_ again as calculate might have set it
+    if (game_over_)
+      return true;
+    // Now the cache should exist
     return valid_actions_cache_->empty();
   }
 
@@ -210,6 +218,8 @@ namespace trianglengin::cpp
     if (!game_over_ && valid_actions_cache_->empty())
     {
       force_game_over("No valid actions available.");
+      // Log the reason for game over after calculation
+      std::cerr << "[GameStateCpp::get_valid_actions] Forced game over: No valid actions found after calculation." << std::endl;
     }
     return *valid_actions_cache_;
   }
@@ -219,14 +229,20 @@ namespace trianglengin::cpp
     valid_actions_cache_ = std::nullopt;
   }
 
-  void GameStateCpp::calculate_valid_actions_internal() const
+  // Make this non-const so it can modify the cache
+  void GameStateCpp::calculate_valid_actions_internal() const // Keep const for now, use mutable cache
   {
     if (game_over_)
     {
       valid_actions_cache_ = std::set<Action>();
+      // Add logging for this case too
+      std::cerr << "[GameStateCpp::calculate_valid_actions_internal] Game already over. Returning empty set." << std::endl;
       return;
     }
     std::set<Action> valid_actions;
+    int can_place_true_count = 0; // Counter for debugging
+    int attempts_count = 0;       // Counter for total placement checks
+
     for (int shape_idx = 0; shape_idx < static_cast<int>(shapes_.size()); ++shape_idx)
     {
       if (!shapes_[shape_idx].has_value())
@@ -237,13 +253,28 @@ namespace trianglengin::cpp
         const auto &[start_c, end_c] = config_.playable_range_per_row[r];
         for (int c = start_c; c < end_c; ++c)
         {
-          if (grid_logic::can_place(grid_data_, shape, r, c))
+          attempts_count++;                                                       // Increment attempt counter
+          bool can_place_result = grid_logic::can_place(grid_data_, shape, r, c); // Store result
+          if (can_place_result)
           {
             valid_actions.insert(encode_action(shape_idx, r, c));
+            can_place_true_count++; // Increment counter
           }
+          // Optional: Log failed attempts if needed for deep debugging
+          // else {
+          //     std::cerr << "[Debug] can_place failed for shape " << shape_idx << " at (" << r << "," << c << ")" << std::endl;
+          // }
         }
       }
     }
+    // Add logging here
+    std::cerr << "[GameStateCpp::calculate_valid_actions_internal] Step: " << current_step_
+              << ", Attempts: " << attempts_count
+              << ", CanPlaceTrue: " << can_place_true_count
+              << ", ValidActionsFound: " << valid_actions.size()
+              << std::endl;
+
+    // Use mutable cache
     valid_actions_cache_ = std::move(valid_actions);
   }
 
@@ -253,6 +284,7 @@ namespace trianglengin::cpp
   GameStateCpp GameStateCpp::copy() const
   {
     GameStateCpp newState = *this;
+    // Copy the cache state explicitly
     if (this->valid_actions_cache_.has_value())
     {
       newState.valid_actions_cache_ = this->valid_actions_cache_;
@@ -275,9 +307,10 @@ namespace trianglengin::cpp
       color_grid[r][c] = was_occupied ? NO_COLOR_ID : DEBUG_COLOR_ID;
       if (!was_occupied)
       {
+        // Check for line clears only if a cell becomes occupied
         grid_logic::check_and_clear_lines(grid_data_, {{r, c}});
       }
-      invalidate_action_cache();
+      invalidate_action_cache(); // Always invalidate after manual change
     }
   }
 

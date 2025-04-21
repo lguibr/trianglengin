@@ -1,8 +1,10 @@
+# File: .github/workflows/ci_cd.yml
 name: CI/CD
 
 on:
   push:
     branches: [ main ]
+    tags: [ 'v*' ] # Trigger workflow on pushes to tags starting with 'v'
   pull_request:
     branches: [ main ]
   # Allow manual trigger
@@ -92,9 +94,6 @@ jobs:
 
       - name: Build wheels with cibuildwheel
         uses: pypa/cibuildwheel@v2.20.0 # Use a specific version
-        # REMOVED the env block below as it was invalid and empty
-        # env:
-        #   pass
 
       - name: Upload wheels artifact
         uses: actions/upload-artifact@v4
@@ -131,7 +130,7 @@ jobs:
     name: Publish to PyPI via OIDC
     needs: [build_wheels, build_sdist] # Run only after wheels and sdist are built
     runs-on: ubuntu-latest
-    # Run only on push events to the main branch tagged with 'v*'
+    # This condition ensures this job only runs for pushes to tags starting with 'v'
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
 
     environment:

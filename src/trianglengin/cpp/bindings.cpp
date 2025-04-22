@@ -1,13 +1,14 @@
+
 // File: src/trianglengin/cpp/bindings.cpp
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/operators.h>
 #include <pybind11/numpy.h>
-#include <pybind11/functional.h> // Needed for std::function with optional
+#include <pybind11/functional.h>
 #include <vector>
 #include <stdexcept>
-#include <cstring>  // For memcpy with int8_t
-#include <optional> // Include optional
+#include <cstring>
+#include <optional>
 
 #include "game_state.h"
 #include "config.h"
@@ -138,6 +139,7 @@ PYBIND11_MODULE(trianglengin_cpp, m)
       .def("get_score", &tg::GameStateCpp::get_score)
       .def("get_valid_actions", &tg::GameStateCpp::get_valid_actions, py::arg("force_recalculate") = false, py::return_value_policy::reference_internal)
       .def("get_current_step", &tg::GameStateCpp::get_current_step)
+      .def("get_last_cleared_triangles", &tg::GameStateCpp::get_last_cleared_triangles) // Added binding
       .def("get_game_over_reason", &tg::GameStateCpp::get_game_over_reason)
       .def("get_shapes_cpp", [](const tg::GameStateCpp &gs)
            {
@@ -154,7 +156,6 @@ PYBIND11_MODULE(trianglengin_cpp, m)
             py::array_t<bool> result({rows, cols});
             auto buf = result.request();
             bool *ptr = static_cast<bool *>(buf.ptr);
-            // Manual copy for std::vector<bool>
             for (size_t r = 0; r < rows; ++r) {
                 for (size_t c = 0; c < cols; ++c) {
                     ptr[r * cols + c] = grid[r][c];
@@ -169,7 +170,6 @@ PYBIND11_MODULE(trianglengin_cpp, m)
             py::array_t<int8_t> result({rows, cols});
             auto buf = result.request();
             int8_t *ptr = static_cast<int8_t *>(buf.ptr);
-             // memcpy is fine for int8_t
              for (size_t r = 0; r < rows; ++r) {
                 std::memcpy(ptr + r * cols, grid[r].data(), cols * sizeof(int8_t));
             }
@@ -182,7 +182,6 @@ PYBIND11_MODULE(trianglengin_cpp, m)
             py::array_t<bool> result({rows, cols});
             auto buf = result.request();
             bool *ptr = static_cast<bool *>(buf.ptr);
-            // Manual copy for std::vector<bool>
              for (size_t r = 0; r < rows; ++r) {
                 for (size_t c = 0; c < cols; ++c) {
                     ptr[r * cols + c] = grid[r][c];
@@ -191,13 +190,11 @@ PYBIND11_MODULE(trianglengin_cpp, m)
             return result; })
       .def("copy", &tg::GameStateCpp::copy)
       .def("debug_toggle_cell", &tg::GameStateCpp::debug_toggle_cell, py::arg("r"), py::arg("c"))
-      // Add binding for debug_set_shapes
       .def("debug_set_shapes", [](tg::GameStateCpp &gs, const py::list &shapes_py)
            {
             std::vector<std::optional<tg::ShapeCpp>> shapes_cpp;
             shapes_cpp.reserve(shapes_py.size());
             for(const auto& shape_item_handle : shapes_py) {
-                // Cast handle to object before passing to conversion function
                 py::object shape_item = py::reinterpret_borrow<py::object>(shape_item_handle);
                 shapes_cpp.push_back(python_to_cpp_shape(shape_item));
             }

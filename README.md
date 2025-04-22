@@ -22,17 +22,141 @@ It encapsulates:
 
 ---
 
+
+
 ## 🎮 The Ultimate Triangle Puzzle Guide 🧩
 
-*(Game rules remain the same)*
+Get ready to become a Triangle Master! This guide explains everything you need to know to play the game, step-by-step, with lots of details!
 
-*(... Game rules section remains unchanged ...)*
+### 1. Introduction: Your Mission! 🎯
+
+Your goal is to place colorful shapes onto a special triangular grid. By filling up lines of triangles, you make them disappear and score points! Keep placing shapes and clearing lines for as long as possible to get the highest score before the grid fills up and you run out of moves. Sounds simple? Let's dive into the details!
+
+### 2. The Playing Field: The Grid 🗺️
+
+- **Triangle Cells:** The game board is a grid made of many small triangles. Some point UP (🔺) and some point DOWN (🔻). They alternate like a checkerboard pattern based on their row and column index (specifically, `(row + col) % 2 != 0` means UP).
+- **Shape:** The grid itself is rectangular overall, but the playable area within it is typically shaped like a triangle or hexagon, wider in the middle and narrower at the top and bottom.
+- **Playable Area:** You can only place shapes within the designated playable area.
+- **Death Zones 💀:** Around the edges of the playable area (often at the start and end of rows), some triangles are marked as "Death Zones". You **cannot** place any part of a shape onto these triangles. They are off-limits! Think of them as the boundaries within the rectangular grid.
+
+### 3. Your Tools: The Shapes 🟦🟥🟩
+
+- **Shape Formation:** Each shape is a collection of connected small triangles (🔺 and 🔻). They come in different colors and arrangements. Some might be a single triangle, others might be long lines, L-shapes, or more complex patterns.
+- **Relative Positions:** The triangles within a shape have fixed positions _relative to each other_. When you move the shape, all its triangles move together as one block.
+- **Preview Area:** You will always have **three** shapes available to choose from at any time. These are shown in a special "preview area" on the side of the screen.
+
+### 4. Making Your Move: Placing Shapes 🖱️➡️▦
+
+This is the core action! Here's exactly how to place a shape:
+
+- **Step 4a: Select a Shape:** Look at the three shapes in the preview area. Click on the one you want to place. It should highlight 💡 to show it's selected.
+- **Step 4b: Aim on the Grid:** Move your mouse cursor over the main grid. You'll see a faint "ghost" image of your selected shape following your mouse. This preview helps you aim.
+- **Step 4c: The Placement Rules (MUST Follow!)**
+  - 📏 **Rule 1: Fit Inside Playable Area:** ALL triangles of your chosen shape must land within the playable grid area. No part of the shape can land in a Death Zone 💀.
+  - 🧱 **Rule 2: No Overlap:** ALL triangles of your chosen shape must land on currently _empty_ spaces on the grid. You cannot place a shape on top of triangles that are already filled with color from previous shapes.
+  - 📐 **Rule 3: Orientation Match!** This is crucial!
+    - If a part of your shape is an UP triangle (🔺), it MUST land on an UP space (🔺) on the grid.
+    - If a part of your shape is a DOWN triangle (🔻), it MUST land on a DOWN space (🔻) on the grid.
+    - 🔺➡️🔺 (OK!)
+    - 🔻➡️🔻 (OK!)
+    - 🔺➡️🔻 (INVALID! ❌)
+    - 🔻➡️🔺 (INVALID! ❌)
+  - **Visual Feedback:** The game helps you!
+    - 👍 **Valid Spot:** If the position under your mouse follows ALL three rules, the ghost preview will usually look solid and possibly greenish. This means you _can_ place the shape here.
+    - 👎 **Invalid Spot:** If the position breaks _any_ of the rules (out of bounds, overlaps, wrong orientation), the ghost preview will usually look faded and possibly reddish. This means you _cannot_ place the shape here.
+- **Step 4d: Confirm Placement:** Once you find a **valid** spot (👍), click the left mouse button again. _Click!_ The shape is now placed permanently on the grid! ✨
+
+### 5. Scoring Points: How You Win! 🏆
+
+You score points in two main ways:
+
+- **Placing Triangles:** You get a small number of points for _every single small triangle_ that makes up the shape you just placed. (e.g., placing a 3-triangle shape might give you 3 \* tiny_score points).
+- **Clearing Lines:** This is where the BIG points come from! You get a much larger number of points for _every single small triangle_ that disappears when you clear a line (or multiple lines at once!). See the next section for details!
+
+### 6. Line Clearing Magic! ✨ (The Key to High Scores!)
+
+This is the most exciting part! When you place a shape, the game immediately checks if you've completed any lines. This section explains how the game _finds_ and _clears_ these lines.
+
+- **What Lines Can Be Cleared?** There are **three** types of lines the game looks for:
+
+  - **Horizontal Lines ↔️:** A straight, unbroken line of filled triangles going across a single row.
+  - **Diagonal Lines (Top-Left to Bottom-Right) ↘️:** An unbroken diagonal line of filled triangles stepping down and to the right.
+  - **Diagonal Lines (Bottom-Left to Top-Right) ↗️:** An unbroken diagonal line of filled triangles stepping up and to the right.
+
+- **How Lines are Found: Pre-calculation of Maximal Lines**
+
+  - **The Idea:** Instead of checking every possible line combination all the time, the game pre-calculates all *maximal* continuous lines of playable triangles when it starts. A **maximal line** is the longest possible straight segment of *playable* triangles (not in a Death Zone) in one of the three directions (Horizontal, Diagonal ↘️, Diagonal ↗️).
+  - **Tracing:** For every playable triangle on the grid, the game traces outwards in each of the three directions to find the full extent of the continuous playable line passing through that triangle in that direction.
+  - **Storing Maximal Lines:** Only the complete maximal lines found are stored. For example, if tracing finds a playable sequence `A-B-C-D`, only the line `(A,B,C,D)` is stored, not the sub-segments like `(A,B,C)` or `(B,C,D)`. These maximal lines represent the *potential* lines that can be cleared.
+  - **Coordinate Map:** The game also builds a map linking each playable triangle coordinate `(r, c)` to the set of maximal lines it belongs to. This allows for quick lookup.
+
+- **Defining the Paths (Neighbor Logic):** How does the game know which triangle is "next" when tracing? It depends on the current triangle's orientation (🔺 or 🔻) and the direction being traced:
+
+  - **Horizontal ↔️:**
+    - Left Neighbor: `(r, c-1)` (Always in the same row)
+    - Right Neighbor: `(r, c+1)` (Always in the same row)
+  - **Diagonal ↘️ (TL-BR):**
+    - If current is 🔺 (Up): Next is `(r+1, c)` (Down triangle directly below)
+    - If current is 🔻 (Down): Next is `(r, c+1)` (Up triangle to the right)
+  - **Diagonal ↗️ (BL-TR):**
+    - If current is 🔻 (Down): Next is `(r-1, c)` (Up triangle directly above)
+    - If current is 🔺 (Up): Next is `(r, c+1)` (Down triangle to the right)
+
+- **Visualizing the Paths:**
+
+  - **Horizontal ↔️:**
+    ```
+    ... [🔻][🔺][🔻][🔺][🔻][🔺] ...  (Moves left/right in the same row)
+    ```
+  - **Diagonal ↘️ (TL-BR):** (Connects via shared horizontal edges)
+    ```
+    ...[🔺]...
+    ...[🔻][🔺] ...
+    ...     [🔻][🔺] ...
+    ...         [🔻] ...
+    (Path alternates row/col increments depending on orientation)
+    ```
+  - **Diagonal ↗️ (BL-TR):** (Connects via shared horizontal edges)
+    ```
+    ...           [🔺]  ...
+    ...      [🔺][🔻]   ...
+    ... [🔺][🔻]        ...
+    ... [🔻]            ...
+    (Path alternates row/col increments depending on orientation)
+    ```
+
+- **The "Full Line" Rule:** After you place a piece, the game looks at the coordinates `(r, c)` of the triangles you just placed. Using the pre-calculated map, it finds all the *maximal* lines that contain _any_ of those coordinates. For each of those maximal lines (that have at least 2 triangles), it checks: "Is _every single triangle coordinate_ in this maximal line now occupied?" If yes, that line is complete! (Note: Single isolated triangles don't count as clearable lines).
+
+- **The _Poof_! 💨:**
+  - If placing your shape completes one or MORE maximal lines (of any type, length >= 2) simultaneously, all the triangles in ALL completed lines vanish instantly!
+  - The spaces become empty again.
+  - You score points for _every single triangle_ that vanished. Clearing multiple lines at once is the best way to rack up points! 🥳
+
+### 7. Getting New Shapes: The Refill 🪄
+
+- **The Trigger:** The game only gives you new shapes when a specific condition is met.
+- **The Condition:** New shapes appear **only when all three of your preview slots become empty at the exact same time.**
+- **How it Happens:** This usually occurs right after you place your _last_ available shape (the third one).
+- **The Refill:** As soon as the third slot becomes empty, _BAM!_ 🪄 Three brand new, randomly generated shapes instantly appear in the preview slots.
+- **Important:** If you place a shape and only one or two slots are empty, you **do not** get new shapes yet. You must use up all three before the refill happens.
+
+### 8. The End of the Road: Game Over 😭
+
+So, how does the game end?
+
+- **The Condition:** The game is over when you **cannot legally place _any_ of the three shapes currently available in your preview slots anywhere on the grid.**
+- **The Check:** After every move (placing a shape and any resulting line clears), and after any potential shape refill, the game checks: "Is there at least one valid spot on the grid for Shape 1? OR for Shape 2? OR for Shape 3?"
+- **No More Moves:** If the answer is "NO" for all three shapes (meaning none of them can be placed anywhere according to the Placement Rules), then the game immediately ends.
+- **Strategy:** This means you need to be careful! Don't fill up the grid in a way that leaves no room for the types of shapes you might get later. Always try to keep options open! 🤔
+
+That's it! Now you know all the rules. Go forth and conquer the Triangle Puzzle! 🏆
 
 ---
 
 ## Purpose
 
-The primary goal is to provide a self-contained, installable library with a high-performance C++ core and a Python interface for the triangle puzzle game. This allows different RL agent implementations or other applications to build upon a consistent and fast game backend. The interactive UI is included but only initialized when running the specific UI commands.
+The primary goal is to provide a self-contained, installable library for the core logic and basic interactive UI of the triangle puzzle game. This allows different RL agent implementations or other applications to build upon a consistent and well-defined game backend, avoiding code duplication.
+
 
 ## Installation
 

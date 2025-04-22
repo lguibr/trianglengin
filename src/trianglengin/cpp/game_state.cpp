@@ -1,10 +1,11 @@
+
 // File: src/trianglengin/cpp/game_state.cpp
 #include "game_state.h"
 #include "grid_logic.h"
 #include "shape_logic.h"
 #include <stdexcept>
 #include <numeric>
-#include <iostream>  // Keep iostream if other debug logs might be added later, or remove if not needed
+#include <iostream>
 #include <algorithm> // For std::min
 
 namespace trianglengin::cpp
@@ -12,10 +13,11 @@ namespace trianglengin::cpp
 
   GameStateCpp::GameStateCpp(const EnvConfigCpp &config, unsigned int initial_seed)
       : config_(config),
-        grid_data_(config_), // Initialize GridData with config
+        grid_data_(config_),
         shapes_(config_.num_shape_slots),
         score_(0.0),
         current_step_(0),
+        last_cleared_triangles_(0), // Initialize added member
         game_over_(false),
         rng_(initial_seed)
   {
@@ -24,17 +26,17 @@ namespace trianglengin::cpp
 
   // --- Explicit Copy Constructor ---
   GameStateCpp::GameStateCpp(const GameStateCpp &other)
-      : config_(other.config_),                           // Copy config
-        grid_data_(other.grid_data_),                     // Use GridData's copy constructor
-        shapes_(other.shapes_),                           // Copy vector of optional shapes
-        score_(other.score_),                             // Copy score
-        current_step_(other.current_step_),               // Copy step
-        game_over_(other.game_over_),                     // Copy game over flag
-        game_over_reason_(other.game_over_reason_),       // Copy reason
-        valid_actions_cache_(other.valid_actions_cache_), // Copy the optional cache
-        rng_(other.rng_)                                  // Copy the RNG state
+      : config_(other.config_),
+        grid_data_(other.grid_data_),
+        shapes_(other.shapes_),
+        score_(other.score_),
+        current_step_(other.current_step_),
+        last_cleared_triangles_(other.last_cleared_triangles_), // Copy added member
+        game_over_(other.game_over_),
+        game_over_reason_(other.game_over_reason_),
+        valid_actions_cache_(other.valid_actions_cache_),
+        rng_(other.rng_)
   {
-    // No additional logic needed if members handle their own copying well
   }
 
   // --- Explicit Copy Assignment Operator ---
@@ -43,14 +45,15 @@ namespace trianglengin::cpp
     if (this != &other)
     {
       config_ = other.config_;
-      grid_data_ = other.grid_data_; // Use GridData's copy assignment
+      grid_data_ = other.grid_data_;
       shapes_ = other.shapes_;
       score_ = other.score_;
       current_step_ = other.current_step_;
+      last_cleared_triangles_ = other.last_cleared_triangles_; // Copy added member
       game_over_ = other.game_over_;
       game_over_reason_ = other.game_over_reason_;
-      valid_actions_cache_ = other.valid_actions_cache_; // Copy the optional cache
-      rng_ = other.rng_;                                 // Copy the RNG state
+      valid_actions_cache_ = other.valid_actions_cache_;
+      rng_ = other.rng_;
     }
     return *this;
   }
@@ -61,6 +64,7 @@ namespace trianglengin::cpp
     std::fill(shapes_.begin(), shapes_.end(), std::nullopt);
     score_ = 0.0;
     current_step_ = 0;
+    last_cleared_triangles_ = 0; // Reset added member
     game_over_ = false;
     game_over_reason_ = std::nullopt;
     valid_actions_cache_ = std::nullopt;
@@ -70,27 +74,24 @@ namespace trianglengin::cpp
 
   void GameStateCpp::check_initial_state_game_over()
   {
-    // Force calculation which updates the cache and potentially the game_over flag
     get_valid_actions(true);
-    // No need to check cache emptiness here, get_valid_actions handles setting the flag
   }
 
   std::tuple<double, bool> GameStateCpp::step(Action action)
   {
+    last_cleared_triangles_ = 0; // Reset before potential clearing
+
     if (game_over_)
     {
       return {0.0, true};
     }
 
-    // Ensure cache is populated before checking the action
-    const auto &valid_actions = get_valid_actions(); // This populates cache if needed
+    const auto &valid_actions = get_valid_actions();
 
-    // Check against the (now guaranteed) populated cache
     if (valid_actions.find(action) == valid_actions.end())
     {
-      // Invalid action detected
       force_game_over("Invalid action provided: " + std::to_string(action));
-      score_ += config_.penalty_game_over; // Apply penalty
+      score_ += config_.penalty_game_over;
       return {config_.penalty_game_over, true};
     }
 
@@ -115,7 +116,6 @@ namespace trianglengin::cpp
 
     const ShapeCpp &shape_to_place = shapes_[shape_idx].value();
 
-    // Re-check placement just before modification (defensive)
     if (!grid_logic::can_place(grid_data_, shape_to_place, r, c))
     {
       force_game_over("Placement check failed for valid action (logic error?). Action: " + std::to_string(action));
@@ -135,7 +135,6 @@ namespace trianglengin::cpp
       std::tie(dr, dc, is_up_ignored) = tri_data;
       int target_r = r + dr;
       int target_c = c + dc;
-      // Bounds check should be implicitly handled by can_place, but double-check
       if (!grid_data_.is_valid(target_r, target_c) || grid_data_.is_death(target_r, target_c))
       {
         force_game_over("Attempted placement out of bounds/death zone during execution. Action: " + std::to_string(action));
@@ -147,7 +146,7 @@ namespace trianglengin::cpp
       newly_occupied_coords.insert({target_r, target_c});
       placed_count++;
     }
-    shapes_[shape_idx] = std::nullopt; // Clear the used shape slot
+    shapes_[shape_idx] = std::nullopt;
 
     // --- Line Clearing ---
     int lines_cleared_count;
@@ -156,6 +155,7 @@ namespace trianglengin::cpp
     std::tie(lines_cleared_count, cleared_coords, cleared_lines_fs) =
         grid_logic::check_and_clear_lines(grid_data_, newly_occupied_coords);
     int cleared_count = static_cast<int>(cleared_coords.size());
+    last_cleared_triangles_ = cleared_count; // Store cleared count
 
     // --- Refill ---
     bool all_slots_empty = true;
@@ -174,8 +174,8 @@ namespace trianglengin::cpp
 
     // --- Update State & Check Game Over ---
     current_step_++;
-    invalidate_action_cache(); // Invalidate cache AFTER state changes
-    get_valid_actions(true);   // Force recalculation AND update game_over_ flag if needed
+    invalidate_action_cache();
+    get_valid_actions(true);
 
     // --- Calculate Reward & Update Score ---
     double reward = 0.0;
@@ -184,23 +184,19 @@ namespace trianglengin::cpp
 
     if (game_over_)
     {
-      // Penalty was applied earlier if game over was due to invalid action this step.
-      // If game over is due to lack of actions *after* this step, no penalty applies here.
+      // Penalty already applied if game over was due to invalid action this step.
     }
     else
     {
       reward += config_.reward_per_step_alive;
     }
-    score_ += reward; // Update score based on calculated reward
+    score_ += reward;
 
-    return {reward, game_over_}; // Return the potentially updated game_over_ flag
+    return {reward, game_over_};
   }
 
-  // --- Simplified is_over ---
   bool GameStateCpp::is_over() const
   {
-    // The game_over_ flag is the single source of truth.
-    // It's updated by step() [via get_valid_actions()] and reset().
     return game_over_;
   }
 
@@ -210,7 +206,7 @@ namespace trianglengin::cpp
     {
       game_over_ = true;
       game_over_reason_ = reason;
-      valid_actions_cache_ = std::set<Action>(); // Clear valid actions on game over
+      valid_actions_cache_ = std::set<Action>();
     }
   }
 
@@ -221,10 +217,8 @@ namespace trianglengin::cpp
 
   const std::set<Action> &GameStateCpp::get_valid_actions(bool force_recalculate)
   {
-    // If game is over, always return the cached empty set
     if (game_over_)
     {
-      // Ensure cache is empty if game_over is true
       if (!valid_actions_cache_.has_value() || !valid_actions_cache_->empty())
       {
         valid_actions_cache_ = std::set<Action>();
@@ -232,23 +226,18 @@ namespace trianglengin::cpp
       return *valid_actions_cache_;
     }
 
-    // If not forcing and cache exists, return it
     if (!force_recalculate && valid_actions_cache_.has_value())
     {
       return *valid_actions_cache_;
     }
 
-    // Otherwise, calculate (which updates the mutable cache)
     calculate_valid_actions_internal();
 
-    // Check if the calculation resulted in no valid actions, triggering game over
     if (!game_over_ && valid_actions_cache_->empty())
     {
-      // Set the game over flag HERE, as this is the definitive check after calculation
       force_game_over("No valid actions available.");
     }
 
-    // Return the calculated (and potentially now empty) cache
     return *valid_actions_cache_;
   }
 
@@ -257,11 +246,8 @@ namespace trianglengin::cpp
     valid_actions_cache_ = std::nullopt;
   }
 
-  // calculate_valid_actions_internal remains const, modifies mutable cache
   void GameStateCpp::calculate_valid_actions_internal() const
   {
-    // This function should NOT set game_over_ directly.
-    // It just calculates the set. The caller (get_valid_actions) checks if empty.
     std::set<Action> valid_actions;
     for (int shape_idx = 0; shape_idx < static_cast<int>(shapes_.size()); ++shape_idx)
     {
@@ -270,7 +256,6 @@ namespace trianglengin::cpp
       const ShapeCpp &shape = shapes_[shape_idx].value();
       for (int r = 0; r < config_.rows; ++r)
       {
-        // Optimization: Check only within playable range? No, C++ can_place handles death zones.
         for (int c = 0; c < config_.cols; ++c)
         {
           if (grid_logic::can_place(grid_data_, shape, r, c))
@@ -280,13 +265,13 @@ namespace trianglengin::cpp
         }
       }
     }
-    valid_actions_cache_ = std::move(valid_actions); // Update the mutable cache
+    valid_actions_cache_ = std::move(valid_actions);
   }
 
   int GameStateCpp::get_current_step() const { return current_step_; }
+  int GameStateCpp::get_last_cleared_triangles() const { return last_cleared_triangles_; } // Added implementation
   std::optional<std::string> GameStateCpp::get_game_over_reason() const { return game_over_reason_; }
 
-  // Python-facing copy method uses the C++ copy constructor
   GameStateCpp GameStateCpp::copy() const
   {
     return GameStateCpp(*this);
@@ -301,13 +286,14 @@ namespace trianglengin::cpp
       bool was_occupied = occupied_grid[r][c];
       occupied_grid[r][c] = !was_occupied;
       color_grid[r][c] = was_occupied ? NO_COLOR_ID : DEBUG_COLOR_ID;
+      last_cleared_triangles_ = 0; // Reset cleared count after manual toggle
       if (!was_occupied)
       {
         // Check for line clears only if a cell becomes occupied
-        grid_logic::check_and_clear_lines(grid_data_, {{r, c}});
+        auto clear_result = grid_logic::check_and_clear_lines(grid_data_, {{r, c}});
+        last_cleared_triangles_ = static_cast<int>(std::get<1>(clear_result).size());
       }
-      invalidate_action_cache(); // Always invalidate after manual change
-      // Force recalculation of valid actions and game over state after toggle
+      invalidate_action_cache();
       get_valid_actions(true);
     }
   }
@@ -324,18 +310,14 @@ namespace trianglengin::cpp
       shapes_[i] = std::nullopt;
     }
     invalidate_action_cache();
-    // Force recalculation of valid actions and game over state after setting shapes
     get_valid_actions(true);
   }
 
   Action GameStateCpp::encode_action(int shape_idx, int r, int c) const
   {
     int grid_size = config_.rows * config_.cols;
-    // Basic bounds check (more robust check in can_place)
     if (shape_idx < 0 || shape_idx >= config_.num_shape_slots || r < 0 || r >= config_.rows || c < 0 || c >= config_.cols)
     {
-      // This case should ideally not be reached if called after can_place
-      // Return an invalid action index or throw? Let's throw for internal logic errors.
       throw std::out_of_range("encode_action arguments out of range during valid action calculation.");
     }
     return shape_idx * grid_size + r * config_.cols + c;

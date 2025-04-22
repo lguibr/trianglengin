@@ -1,14 +1,13 @@
 # File: src/trianglengin/game_interface.py
 import logging
 import random
-from typing import Any, cast  # Import necessary types
+from typing import Any, cast
 
 import numpy as np
 
 from .config import EnvConfig
 
 try:
-    # Keep the alias for clarity within this file
     import trianglengin.trianglengin_cpp as cpp_module
 except ImportError as e:
     raise ImportError(
@@ -27,7 +26,6 @@ class Shape:
         color: tuple[int, int, int],
         color_id: int,
     ):
-        # Sort triangles for consistent representation and hashing
         self.triangles: list[tuple[int, int, bool]] = sorted(triangles)
         self.color: tuple[int, int, int] = color
         self.color_id: int = color_id
@@ -42,13 +40,11 @@ class Shape:
 
     def copy(self) -> "Shape":
         """Creates a shallow copy."""
-        # Use sorted triangles in the copy as well
         return Shape(list(self.triangles), self.color, self.color_id)
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Shape):
             return NotImplemented
-        # Comparison relies on sorted triangles
         return (
             self.triangles == other.triangles
             and self.color == other.color
@@ -56,7 +52,6 @@ class Shape:
         )
 
     def __hash__(self) -> int:
-        # Hash relies on sorted triangles (converted to tuple)
         return hash((tuple(self.triangles), self.color, self.color_id))
 
     def __str__(self) -> str:
@@ -78,7 +73,7 @@ class GameState:
     Provides a Pythonic interface to the core game logic.
     """
 
-    _cpp_state: cpp_module.GameStateCpp  # Add type hint for instance variable
+    _cpp_state: cpp_module.GameStateCpp
 
     def __init__(
         self, config: EnvConfig | None = None, initial_seed: int | None = None
@@ -88,7 +83,6 @@ class GameState:
             initial_seed if initial_seed is not None else random.randint(0, 2**32 - 1)
         )
         try:
-            # Pass the EnvConfig object directly to the C++ constructor binding
             self._cpp_state = cpp_module.GameStateCpp(self.env_config, used_seed)
         except Exception as e:
             log.exception(f"Failed to initialize C++ GameStateCpp: {e}")
@@ -108,24 +102,19 @@ class GameState:
         Returns: (reward, done)
         """
         try:
-            # The C++ method already returns tuple[double, bool], cast might be redundant
-            # if pybind handles it, but explicit cast helps mypy if stub is missing details.
             reward, done = cast("tuple[float, bool]", self._cpp_state.step(action))
             self._clear_caches()
             return reward, done
         except Exception as e:
             log.exception(f"Error during C++ step execution for action {action}: {e}")
-            # Return penalty and done=True consistent with C++ logic for errors during step
             return self.env_config.PENALTY_GAME_OVER, True
 
     def is_over(self) -> bool:
         """Checks if the game is over."""
-        # C++ returns bool, cast might be redundant but safe for mypy
         return cast("bool", self._cpp_state.is_over())
 
     def game_score(self) -> float:
         """Returns the current accumulated score."""
-        # C++ returns double, cast might be redundant but safe for mypy
         return cast("float", self._cpp_state.get_score())
 
     def get_outcome(self) -> float:
@@ -134,18 +123,14 @@ class GameState:
         Required by MCTS implementations like trimcts.
         """
         if self.is_over():
-            # In this game, the final score is the outcome.
-            # Adjust if a different outcome definition is needed (e.g., +1 win, -1 loss).
             return self.game_score()
         else:
-            # MCTS typically expects 0 for non-terminal states during simulation.
             return 0.0
 
     def valid_actions(self, force_recalculate: bool = False) -> set[int]:
         """
         Returns a set of valid encoded action indices for the current state.
         """
-        # C++ returns std::set<int>, pybind converts to Python set. Cast is safe.
         return cast(
             "set[int]", set(self._cpp_state.get_valid_actions(force_recalculate))
         )
@@ -153,14 +138,12 @@ class GameState:
     def get_shapes(self) -> list[Shape | None]:
         """Returns the list of current shapes in the preview slots."""
         if self._cached_shapes is None:
-            # C++ returns list[Optional[tuple[list[tuple], tuple, int]]]
             shapes_data = self._cpp_state.get_shapes_cpp()
             self._cached_shapes = []
             for data in shapes_data:
                 if data is None:
                     self._cached_shapes.append(None)
                 else:
-                    # Explicitly cast the structure returned by pybind if needed
                     tris_py, color_py, id_py = cast(
                         "tuple[list[tuple[int, int, bool]], tuple[int, int, int], int]",
                         data,
@@ -174,7 +157,6 @@ class GameState:
         Uses cached data if available.
         """
         if self._cached_grid_data is None:
-            # pybind numpy bindings should return np.ndarray directly
             occupied_np = self._cpp_state.get_grid_occupied_flat()
             color_id_np = self._cpp_state.get_grid_colors_flat()
             death_np = self._cpp_state.get_grid_death_flat()
@@ -190,6 +172,10 @@ class GameState:
         """Returns the current step count."""
         return cast("int", self._cpp_state.get_current_step())
 
+    def get_last_cleared_triangles(self) -> int:
+        """Returns the number of triangles cleared in the most recent step."""
+        return cast("int", self._cpp_state.get_last_cleared_triangles())
+
     def get_game_over_reason(self) -> str | None:
         """Returns the reason why the game ended, if it's over."""
         return cast("str | None", self._cpp_state.get_game_over_reason())
@@ -198,7 +184,7 @@ class GameState:
         """Creates a deep copy of the game state."""
         new_wrapper = GameState.__new__(GameState)
         new_wrapper.env_config = self.env_config
-        new_wrapper._cpp_state = self._cpp_state.copy()  # C++ copy handles members
+        new_wrapper._cpp_state = self._cpp_state.copy()
         new_wrapper._cached_shapes = None
         new_wrapper._cached_grid_data = None
         return new_wrapper
@@ -212,10 +198,9 @@ class GameState:
         """
         Directly sets the shapes in the preview slots. For debugging/testing.
         """
-        # Convert Python Shape objects (or None) to the tuple format expected by C++ binding
         shapes_data = [s.to_cpp_repr() if s else None for s in shapes]
         self._cpp_state.debug_set_shapes(shapes_data)
-        self._clear_caches()  # Invalidate caches after changing shapes
+        self._clear_caches()
 
     def _clear_caches(self) -> None:
         """Clears Python-level caches."""

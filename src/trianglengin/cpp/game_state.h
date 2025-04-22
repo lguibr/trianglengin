@@ -1,4 +1,4 @@
-// File: src/trianglengin/cpp/game_state.h
+
 #ifndef TRIANGLENGIN_CPP_GAME_STATE_H
 #define TRIANGLENGIN_CPP_GAME_STATE_H
 
@@ -40,6 +40,7 @@ namespace trianglengin::cpp
     double get_score() const;
     const std::set<Action> &get_valid_actions(bool force_recalculate = false);
     int get_current_step() const;
+    int get_last_cleared_triangles() const; // Added getter
     std::optional<std::string> get_game_over_reason() const;
     GameStateCpp copy() const; // Keep Python-facing copy method
     void debug_toggle_cell(int r, int c);
@@ -62,6 +63,7 @@ namespace trianglengin::cpp
     std::vector<std::optional<ShapeCpp>> shapes_;
     double score_;
     int current_step_;
+    int last_cleared_triangles_; // Added member
     bool game_over_;
     std::optional<std::string> game_over_reason_;
     mutable std::optional<std::set<Action>> valid_actions_cache_; // Mutable for const getter
